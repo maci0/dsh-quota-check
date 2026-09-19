@@ -57,7 +57,7 @@ interface ProbeBase {
     /** Which kind of figure this is. */
     readonly kind: ProbeKind;
     /** Credential references tried when the provider configuration names none. */
-    readonly envNames: readonly string[];
+    readonly envNames?: readonly string[];
     /**
      * Requests discovered from an earlier answer, for a route whose endpoint
      * names an id only the provider itself knows.

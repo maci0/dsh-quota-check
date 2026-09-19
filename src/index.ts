@@ -55,6 +55,9 @@ export const DEFAULT_TIMEOUT_MS = 10_000
 /** Seconds the browser half waits between re-reads, unless configured otherwise. */
 export const DEFAULT_REFRESH_SECONDS = 300
 
+/** Live report entries one host keeps before it starts evicting. */
+const MAX_REPORTS = 512
+
 /** Configuration accepted from this plugin's row in a profile patch. */
 export interface Config {
   /** Seconds a reading stays cached. `0` re-asks on every request. @default 60 */
@@ -108,12 +111,36 @@ interface ProviderConfig {
   readonly apiKeyEnv?: string
 }
 
-/** Write a JSON reply; readings are live facts and are never cached by the browser. */
-function sendJson(res: ResponseLike, status: number, payload: unknown): void {
+/** Write a JSON reply whose body is already serialized. */
+function sendBody(res: ResponseLike, status: number, body: string): void {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
   res.setHeader('cache-control', 'no-store')
-  res.end(JSON.stringify(payload))
+  res.end(body)
+}
+
+/** Write a JSON reply; readings are live facts and are never cached by the browser. */
+function sendJson(res: ResponseLike, status: number, payload: unknown): void {
+  sendBody(res, status, JSON.stringify(payload))
+}
+
+/**
+ * Query parameters of a request target.
+ *
+ * Only the query matters here, so only the query is parsed: building a `URL`
+ * for every read pays for an origin the route never looks at.
+ * @param url - request target, path and query.
+ * @returns the decoded parameters.
+ */
+function searchParamsOf(url: string): URLSearchParams {
+  // The fragment is not part of the request target a `URL` would parse either,
+  // and a target whose `#` precedes its `?` must not have the fragment read as
+  // query text.
+  const hash = url.indexOf('#')
+  const target = hash < 0 ? url : url.slice(0, hash)
+  const start = target.indexOf('?')
+  if (start < 0) return new URLSearchParams()
+  return new URLSearchParams(target.slice(start + 1))
 }
 
 /** The composition's trust fence, when this composition mounts one. */
@@ -183,6 +210,8 @@ async function apiKeyOf(
  * @returns the report, never throwing: a failure is an `error` report.
  */
 async function buildReport(ctx: HostContext, providerId: string, timeoutMs: number, refreshMs: number): Promise<QuotaReport> {
+  // Resolved per miss, not cached: the miss is network-bound, and a profile
+  // cache would hide a settings edit (baseURL, displayName) for its whole TTL.
   const config = providerConfigOf(ctx, providerId)
   const displayName = config.displayName ?? providerId
   const base = { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs }
@@ -194,16 +223,17 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
       message: 'no balance or quota endpoint is known for this provider',
     }
   }
+  const envNames = probe.envNames ?? []
   try {
     const local = probe.local
     let requests: readonly LocalRequest[]
     if (local === undefined) {
-      const key = await apiKeyOf(ctx, config, probe.envNames)
+      const key = await apiKeyOf(ctx, config, envNames)
       if (key === undefined) {
         return {
           ...base,
           status: 'error',
-          message: `no credential is configured for this route (${config.apiKeyEnv ?? probe.envNames.join(' / ')})`,
+          message: `no credential is configured for this route (${config.apiKeyEnv ?? envNames.join(' / ')})`,
         }
       }
       if (probe.requests !== undefined) {
@@ -318,19 +348,40 @@ export function apply(ctx: HostContext, config: Config = {}): void {
   const cacheSeconds = validated.cacheSeconds
   const timeoutMs = validated.timeoutMs
   const refreshMs = validated.refreshSeconds * 1_000
-  const cache = new Map<string, { at: number; report: QuotaReport }>()
-  const inflight = new Map<string, Promise<QuotaReport>>()
+  const cache = new Map<string, { at: number; body: string }>()
+  const inflight = new Map<string, Promise<string>>()
 
-  const reportFor = (providerId: string, refresh: boolean): Promise<QuotaReport> => {
+  /**
+   * Keep the report map at its cap: once it holds `MAX_REPORTS`, the oldest key
+   * goes before the next insert. `Map` iterates in insertion order, so the first
+   * key is the one inserted longest ago; an entry whose lifetime has passed is
+   * already a miss on read, so it needs no sweep here.
+   */
+  const pruneReports = (): void => {
+    if (cache.size < MAX_REPORTS) return
+    const oldest = cache.keys().next().value
+    if (oldest !== undefined) cache.delete(oldest)
+  }
+
+  /**
+   * Serve one provider's serialized reading: the cached body, or a fresh one.
+   *
+   * The body is serialized once, when the reading is taken, so a hit answers
+   * with the bytes written then instead of serializing the same report again on
+   * every poll.
+   */
+  const reportFor = (providerId: string, refresh: boolean): Promise<string> => {
     const hit = cache.get(providerId)
     if (!refresh && hit !== undefined && Date.now() - hit.at < cacheSeconds * 1_000) {
-      return Promise.resolve(hit.report)
+      return Promise.resolve(hit.body)
     }
     const running = inflight.get(providerId)
     if (running !== undefined) return running
     const pending = buildReport(ctx, providerId, timeoutMs, refreshMs).then((report) => {
-      cache.set(providerId, { at: Date.now(), report })
-      return report
+      pruneReports()
+      const body = JSON.stringify(report)
+      cache.set(providerId, { at: Date.now(), body })
+      return body
     }).finally(() => {
       inflight.delete(providerId)
     })
@@ -350,13 +401,14 @@ export function apply(ctx: HostContext, config: Config = {}): void {
       sendJson(res, 405, { status: 'error', message: 'this route answers GET only' })
       return
     }
-    const target = new URL(String(req.url ?? ROUTE), 'http://localhost')
-    const providerId = target.searchParams.get('provider') ?? ''
+    const params = searchParamsOf(String(req.url ?? ROUTE))
+    const providerId = params.get('provider') ?? ''
     if (providerId.length === 0) {
       sendJson(res, 400, { status: 'error', message: 'a provider query parameter is required' })
       return
     }
-    sendJson(res, 200, await reportFor(providerId, target.searchParams.get('refresh') === '1'))
+    const body = await reportFor(providerId, params.get('refresh') === '1')
+    sendBody(res, 200, body)
   }
 
   ctx.effect(

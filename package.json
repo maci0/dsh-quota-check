@@ -1,6 +1,6 @@
 {
   "name": "dsh-quota-check",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -55,10 +55,5 @@
   },
   "peerDependencies": {
     "@deepseek-ai/schemastery": "*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/schemastery": {
-      "optional": true
-    }
   }
 }

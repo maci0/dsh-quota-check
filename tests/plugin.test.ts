@@ -7,80 +7,8 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { apply, ROUTE } from '../src/index.ts'
-import type { Disposable, HostContext, SettingsDescriptorLike, WebRouteLike } from '../src/host.ts'
-
-/** One captured response. */
-interface Captured {
-  status: number
-  headers: Record<string, string>
-  body: unknown
-}
-
-/** Services a case may mount; absent keys read as "not mounted". */
-interface Services {
-  llm?: unknown
-  settings?: { describe(): readonly SettingsDescriptorLike[] }
-  credentials?: { resolve(ref: string): Promise<{ value: string } | undefined> }
-  connection?: { requestRejection(request: { headers: object | undefined }): 401 | 403 | undefined }
-}
-
-/** Mount the plugin over a fake context and return its registered route. */
-function mount(services: Services, config?: { cacheSeconds?: number }): { route: WebRouteLike; disposers: Disposable[] } {
-  const routes: WebRouteLike[] = []
-  const disposers: Disposable[] = []
-  const ctx = {
-    inject: (): void => {},
-    effect: (callback: () => Disposable | void): void => {
-      const disposer = callback()
-      if (typeof disposer === 'function') disposers.push(disposer)
-    },
-    get: (name: string): unknown => (services as Record<string, unknown>)[name],
-    logger: { warn: (): void => {}, error: (): void => {} },
-    webServer: {
-      register: (route: WebRouteLike): Disposable => {
-        routes.push(route)
-        return () => {}
-      },
-    },
-  } as unknown as HostContext
-  apply(ctx, config)
-  assert.equal(routes.length, 1)
-  const route = routes[0]
-  assert.ok(route)
-  assert.equal(route.path, ROUTE)
-  return { route, disposers }
-}
-
-/** Run one request through the route. */
-async function request(route: WebRouteLike, url: string, method = 'GET', headers: object = {}): Promise<Captured> {
-  const captured: Captured = { status: 0, headers: {}, body: undefined }
-  const res = {
-    statusCode: 0,
-    setHeader(name: string, value: string): void { captured.headers[name] = value },
-    end(body?: string): void {
-      captured.status = res.statusCode
-      captured.body = body === undefined ? undefined : JSON.parse(body)
-    },
-  }
-  await route.handler({ method, url, headers }, res)
-  return captured
-}
-
-/** Replace global fetch for one case; returns the calls it saw and a restore. */
-function stubFetch(payload: unknown, options?: { status?: number }): { calls: { url: string; headers: Record<string, string> }[]; restore: () => void } {
-  const calls: { url: string; headers: Record<string, string> }[] = []
-  const original = globalThis.fetch
-  globalThis.fetch = ((url: string | URL, init?: { headers?: Record<string, string> }) => {
-    calls.push({ url: String(url), headers: init?.headers ?? {} })
-    return Promise.resolve({
-      ok: (options?.status ?? 200) < 400,
-      status: options?.status ?? 200,
-      json: () => Promise.resolve(payload),
-    })
-  }) as typeof globalThis.fetch
-  return { calls, restore: () => { globalThis.fetch = original } }
-}
+import { ROUTE } from '../src/index.ts'
+import { mount, request, stubFetch, type Services } from './harness.ts'
 
 /** Services pointing at the DeepSeek balance endpoint. */
 function deepSeekServices(): Services {

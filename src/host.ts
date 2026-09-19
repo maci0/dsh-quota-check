@@ -21,15 +21,6 @@ export interface SettingsDescriptorLike {
   readonly value: unknown
 }
 
-/** The slice of the settings service this plugin reads. */
-export interface SettingsLike {
-  /**
-   * Describe every registered namespace.
-   * @returns one descriptor per namespace; the value is the resolved section.
-   */
-  describe(): readonly SettingsDescriptorLike[]
-}
-
 /** One configurable provider route, as the LLM registry declares it. */
 export interface ConfigurableProviderLike {
   /** Route id the model picker shows, e.g. `zai`. */

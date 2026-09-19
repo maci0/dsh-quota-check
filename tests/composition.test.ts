@@ -18,14 +18,8 @@ import { Context } from '@deepseek-ai/cordis'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import * as QuotaCheck from '../src/index.ts'
 
-/** What one real HTTP call returned. */
-interface HttpReply {
-  status: number
-  body: unknown
-}
-
 /** One HTTP GET against the composition's carrier. */
-async function get(url: string): Promise<HttpReply> {
+async function get(url: string): Promise<{ status: number; body: unknown }> {
   const response = await fetch(url)
   const text = await response.text()
   return { status: response.status, body: text === '' ? undefined : JSON.parse(text) }

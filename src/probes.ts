@@ -70,7 +70,7 @@ interface ProbeBase {
   /** Which kind of figure this is. */
   readonly kind: ProbeKind
   /** Credential references tried when the provider configuration names none. */
-  readonly envNames: readonly string[]
+  readonly envNames?: readonly string[]
   /**
    * Requests discovered from an earlier answer, for a route whose endpoint
    * names an id only the provider itself knows.
@@ -210,15 +210,6 @@ function parseOpenRouterCredits(payload: unknown): ProbeReading | null {
   }
 }
 
-/** Reset instant for one z.ai limit, as a local time string. */
-function resetSuffix(limit: Record<string, unknown>): string {
-  const raw = numberOf(limit['nextResetTime'])
-  if (raw === undefined) return ''
-  const at = new Date(raw)
-  if (Number.isNaN(at.getTime())) return ''
-  return `, resets ${at.toLocaleString()}`
-}
-
 /** Window length one z.ai limit covers, e.g. `5h` or `1w`; empty when unreported. */
 function windowSuffix(limit: Record<string, unknown>): string {
   const number = numberOf(limit['number'])
@@ -241,7 +232,7 @@ function parseZaiQuota(payload: unknown): ProbeReading | null {
     if (percent === undefined) continue
     const type = stringOf(limit['type']) ?? 'Quota'
     const label = `${ZAI_LIMIT_LABELS[type] ?? type}${windowSuffix(limit)}`
-    windows.push({ label, percent, reset: resetSuffix(limit) })
+    windows.push({ label, percent, reset: resetSuffixFrom(numberOf(limit['nextResetTime'])) })
   }
   if (windows.length === 0) return null
   const worst = windows.reduce((left, right) => (right.percent > left.percent ? right : left))
@@ -761,22 +752,22 @@ function liteLlmProbe(origin: string): Probe {
 
 /** Claude Code subscription probe: the plan's own usage meter. */
 function claudeProbe(): Probe {
-  return { kind: 'quota', local: 'claude', envNames: [], parse: payloads => parseClaudeUsage(payloads[0]) }
+  return { kind: 'quota', local: 'claude', parse: payloads => parseClaudeUsage(payloads[0]) }
 }
 
 /** Codex (ChatGPT) subscription probe. */
 function codexProbe(): Probe {
-  return { kind: 'quota', local: 'codex', envNames: [], parse: payloads => parseCodexUsage(payloads[0]) }
+  return { kind: 'quota', local: 'codex', parse: payloads => parseCodexUsage(payloads[0]) }
 }
 
 /** Grok subscription probe: two billing meters in one reading. */
 function grokProbe(): Probe {
-  return { kind: 'quota', local: 'grok', envNames: [], parse: parseGrokBilling }
+  return { kind: 'quota', local: 'grok', parse: parseGrokBilling }
 }
 
 /** Cursor subscription probe. */
 function cursorProbe(): Probe {
-  return { kind: 'quota', local: 'cursor', envNames: [], parse: payloads => parseCursorSummary(payloads[0]) }
+  return { kind: 'quota', local: 'cursor', parse: payloads => parseCursorSummary(payloads[0]) }
 }
 
 /**
