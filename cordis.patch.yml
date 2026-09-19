@@ -1,0 +1,13 @@
+# The dsh-quota-check bundle patch: applied automatically when a profile lists
+# this bundle (`dsh plugin add`/`update` appends the package to
+# dsh.profile.bundles). Users override this row from their profile's own
+# cordis.patch.yml (live-watched; dsh.profile.bundles is frozen at boot) with a
+# `- id: quota-check` row, which replaces the row's whole `config`.
+# `name` stays a bare package specifier — the browser half is served by the
+# client module system, which resolves the Loader entry's package, reads its
+# `dsh.client` manifest, and serves `exports["./client"]`.
+# Do not also insert this same row into the profile patch: insert does not
+# dedupe ids, and a second row would register the plugin twice.
+- insert:
+    - id: quota-check
+      name: 'dsh-quota-check'
