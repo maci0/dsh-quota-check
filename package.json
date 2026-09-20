@@ -29,6 +29,9 @@
         "@deepseek-ai/dsh-client-ui-session",
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
+    },
+    "compatibility": {
+      "dsh": ">=0.1.0-rc.8 <0.2.0"
     }
   },
   "files": [
@@ -55,5 +58,9 @@
   },
   "peerDependencies": {
     "@deepseek-ai/schemastery": "*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maci0/dsh-quota-check.git"
   }
 }
