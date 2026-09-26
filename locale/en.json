@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quota",
+    "description": "Show the selected provider's quota and API balance in the composer."
+  }
+}
