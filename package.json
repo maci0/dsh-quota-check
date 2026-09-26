@@ -1,6 +1,6 @@
 {
   "name": "dsh-quota-check",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
@@ -53,18 +53,18 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2",
-    "@deepseek-ai/schemastery": "3.18.2",
+    "@deepseek-ai/schemastery": "^3.18.4",
     "@types/node": "^22.20.2",
     "typescript": "^7.0.2"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/schemastery": "*"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/maci0/dsh-quota-check.git"
   },
-  "icon": "./icon.svg"
+  "icon": "./icon.svg",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  }
 }
