@@ -33,8 +33,10 @@ no balance route.
 
 ## What you get
 
-- **One statusbar figure, no configuration.** The chip follows the session's own
-  model selection; there is no card to open and nothing to point at a provider.
+- **One statusbar figure, no provider setup.** The chip follows the session's own
+  model selection; nothing has to be pointed at a provider. The row's own
+  cadences and deadline are edited from the **Plugins** page's card (see
+  [Configure](#configure)).
 - **The key never reaches the browser.** The host half owns the credential and the
   outbound request, and the browser half only draws the formatted text it returns.
 - **One read per provider, cached.** A rerender, a session switch, or a second tab
