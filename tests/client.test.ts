@@ -181,6 +181,27 @@ test('the chip registers into the composer statusbar and draws the host reading'
   }
 })
 
+test('a failed reading is shown dimmed, with the reason in the tooltip', async () => {
+  // Silence here would hide a rejected key or an unreachable endpoint behind
+  // "nothing to show"; a provider that simply publishes no figure stays silent.
+  const registration = mount()
+  const stub = stubFetch({
+    provider: 'deepseek', displayName: 'deepseek', status: 'error',
+    message: 'the stored key was rejected', fetchedAt: Date.now(), refreshMs: 300_000,
+  })
+  try {
+    const element = await settle(registration, {
+      useProjection: (key: string) => (key === 'modelSelection' ? { next: { provider: 'deepseek' }, lastUsed: null } : undefined),
+    })
+    assert.notEqual(element, null)
+    assert.deepEqual(element?.children, ['quota ?'])
+    assert.equal(element?.props['data-level'], 'error')
+    assert.match(String(element?.props['title']), /key was rejected/)
+  } finally {
+    stub.restore()
+  }
+})
+
 test('nothing renders while the provider publishes no figure', async () => {
   const registration = mount()
   const stub = stubFetch({ provider: 'vllm-local', displayName: 'vllm-local', status: 'unsupported' })

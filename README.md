@@ -31,6 +31,11 @@ Any other provider renders nothing: the statusbar never grows a "no data" row.
 That is the case for local inference (vLLM) and for per-request API billing with
 no balance route.
 
+A reading that **failed** — a rejected key, an unreachable endpoint, a provider
+that answered with an error — is the one exception: the chip renders dimmed as
+`quota ?` with the reason in its tooltip, because silence there would hide a
+broken setup behind "nothing to show". Clicking it retries.
+
 ## What you get
 
 - **One statusbar figure, no provider setup.** The chip follows the session's own
