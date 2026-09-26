@@ -1,6 +1,6 @@
 {
   "name": "dsh-quota-check",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
