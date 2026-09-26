@@ -65,8 +65,25 @@ function mount(): {
   const registrations: { slot: string; entry: Record<string, unknown>; component: (props: Record<string, unknown>) => Element | null }[] = []
   const ctx = {
     effect: (callback: () => unknown): unknown => callback(),
+    locale: {
+      bind: () => (key: string) => key,
+      register: (): void => {},
+    },
+    // The Plugins card binds this namespace; these cases exercise the chip, and
+    // the card's own contract is covered by tests/config-card.test.ts.
+    configForms: {
+      get: () => ({
+        getSnapshot: () => ({ status: 'unavailable', value: undefined, base: undefined, user: undefined, revision: undefined, writable: false, mode: 'memory' }),
+        subscribe: () => () => {},
+        mutate: async () => false,
+        set: async () => false,
+        unset: async () => false,
+      }),
+    },
     slots: {
       inject: (slot: string, callback: () => unknown): void => {
+        // A placeholder per injected slot; the `register` that follows fills the
+        // last one in. The chip is registered first, so `registrations[0]` is it.
         registrations.push({ slot, entry: {}, component: () => null })
         callback()
       },
@@ -101,7 +118,7 @@ function mount(): {
   const sheet = appended[0]?.textContent ?? ''
   assert.match(sheet, /\.qc-chip\{--qc-control-inset:46px;order:1;margin-left:auto;margin-right:calc\(max\(0px,\(100% - var\(--dsh-composer-card-max-width\)\)\/2\) \+ var\(--qc-control-inset\)\)/)
   assert.match(sheet, /border-radius:999px;corner-shape:round/)
-  assert.deepEqual(exported['inject'], ['slots'])
+  assert.deepEqual(exported['inject'], ['slots', 'configForms', 'locale'])
   ;(exported['apply'] as (ctx: unknown) => void)(ctx)
   const registration = registrations[0]
   assert.ok(registration)

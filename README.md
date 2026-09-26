@@ -104,9 +104,15 @@ id.
 
 ## Configure
 
-The row schema is the exported `Config`; the Loader validates a bundle row
-against it, and every value a deployment may vary is a field. Set them from the
-profile's own `cordis.patch.yml`:
+Three fields, all editable from the Web client: open **Plugins** → the
+**quota-check** row → **Configure**. The card validates the schema's bounds
+before the write, saves every changed field in one update, and marks the fields
+you have overridden with a **Reset to defaults** control. Every field is
+`volatile()`, so a save reaches the running route: the host re-reads the row per
+request and drops its served readings, which is why a new cache window or
+cadence applies to the next poll instead of waiting for a restart.
+
+The same row can be set by hand in the profile's own `cordis.patch.yml`:
 
 ```yaml
 - id: quota-check
@@ -115,6 +121,12 @@ profile's own `cordis.patch.yml`:
     timeoutMs: 10000      # per-provider request deadline
     refreshSeconds: 300   # browser re-read cadence; reported to the chip
 ```
+
+| Field | Default | Bounds | Meaning |
+|---|---|---|---|
+| `cacheSeconds` | `60` | 0–3600 | How long one reading is served before the provider is asked again. `0` asks every time. |
+| `timeoutMs` | `10000` | 1–60000 | Per-request deadline for one provider call. |
+| `refreshSeconds` | `300` | 10–3600 | The cadence the host reports to the chip, which re-reads at that interval. |
 
 ## Security
 

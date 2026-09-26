@@ -25,11 +25,19 @@ export interface Services {
 }
 
 /** Mount the plugin over a fake context and return its registered route. */
-export function mount(services: Services, config?: { cacheSeconds?: number }): { route: WebRouteLike } {
+export function mount(
+  services: Services,
+  config?: Parameters<typeof apply>[1],
+): { route: WebRouteLike, emitVolatile: () => void } {
   const routes: WebRouteLike[] = []
+  const volatileListeners: (() => void)[] = []
   const ctx = {
     inject: (): void => {},
     effect: (callback: () => Disposable | void): void => { callback() },
+    on: (event: string, listener: () => void): (() => void) => {
+      if (event === 'loader/volatile-update') volatileListeners.push(listener)
+      return () => {}
+    },
     get: (name: string): unknown => (services as Record<string, unknown>)[name],
     logger: { warn: (): void => {}, error: (): void => {} },
     webServer: {
@@ -44,7 +52,7 @@ export function mount(services: Services, config?: { cacheSeconds?: number }): {
   const route = routes[0]
   assert.ok(route)
   assert.equal(route.path, ROUTE)
-  return { route }
+  return { route, emitVolatile: () => { for (const listener of volatileListeners) listener() } }
 }
 
 /** Run one request through the route. */

@@ -21,6 +21,7 @@
  * @module dsh-quota-check
  */
 
+import type { Volatile } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { localRequests, type LocalRequest } from './local-usage.ts'
 import { resolveProbe } from './probes.ts'
@@ -58,27 +59,81 @@ export const DEFAULT_REFRESH_SECONDS = 300
 /** Live report entries one host keeps before it starts evicting. */
 const MAX_REPORTS = 512
 
-/** Configuration accepted from this plugin's row in a profile patch. */
+/**
+ * Configuration this plugin's row resolves to, as `apply` receives it.
+ *
+ * Every field is `volatile()`, so the loader hands a live reference rather than
+ * a value: the settings document accepts writes only under a volatile node, and
+ * the Plugins page's Quota check card edits exactly these three. Each is read
+ * per request, so a save changes the next reading, cache window, and polling
+ * cadence without remounting the route.
+ */
 export interface Config {
   /** Seconds a reading stays cached. `0` re-asks on every request. @default 60 */
-  readonly cacheSeconds?: number
+  readonly cacheSeconds: Volatile<number>
   /** Per-request provider deadline in milliseconds. @default 10000 */
-  readonly timeoutMs?: number
+  readonly timeoutMs: Volatile<number>
   /** Seconds between the browser half's re-reads. @default 300 */
-  readonly refreshSeconds?: number
+  readonly refreshSeconds: Volatile<number>
 }
 
+/** Raw row values, as a profile patch states them and as direct callers pass them. */
+export type Options = { [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : Config[K] }
+
 /**
- * Row schema: what Cordis validates this plugin's `config` against, and where
- * each default lives. Every value here is a deployment choice — the cadences
- * and the deadline vary by machine — so none is a constant only this plugin
- * could change.
+ * Field defaults and bounds with no volatility wrapper. {@link resolveRow}
+ * parses a plain row through this schema, so its output is plain values; the
+ * loader-facing {@link Config} below is the same shape with every field made
+ * `volatile()`. The pair is asserted equal in the suite.
  */
-export const Config: Schema<Config> = Schema.object({
+const ValueSchema = Schema.object({
   cacheSeconds: Schema.number().min(0).max(3_600).default(DEFAULT_CACHE_SECONDS),
   timeoutMs: Schema.number().min(1).max(60_000).default(DEFAULT_TIMEOUT_MS),
   refreshSeconds: Schema.number().min(10).max(3_600).default(DEFAULT_REFRESH_SECONDS),
 })
+
+/**
+ * Row schema as Cordis resolves it: what this plugin's `config` is validated
+ * against, and where each default lives. Every value here is a deployment
+ * choice — the cadences and the deadline vary by machine — so none is a
+ * constant only this plugin could change, and all three are editable from the
+ * Plugins page.
+ */
+export const Config = Schema.object({
+  cacheSeconds: Schema.number().min(0).max(3_600).default(DEFAULT_CACHE_SECONDS).volatile(),
+  timeoutMs: Schema.number().min(1).max(60_000).default(DEFAULT_TIMEOUT_MS).volatile(),
+  refreshSeconds: Schema.number().min(10).max(3_600).default(DEFAULT_REFRESH_SECONDS).volatile(),
+})
+
+/**
+ * Read one configured field as a plain value.
+ *
+ * The loader hands a `volatile()` field a live reference; a direct caller (a
+ * test, another plugin composing this one) hands the value itself. Both are
+ * accepted, so one read path serves both.
+ * @param value - the configured value, live or plain.
+ * @returns the current plain value, or `undefined` when a reference holds none.
+ */
+function readLive<T>(value: T | Volatile<T> | undefined): T | undefined {
+  if (value !== null && typeof value === 'object' && typeof (value as Volatile<T>).get === 'function') {
+    // A scalar snapshot is the value; the generic cannot narrow that itself.
+    return (value as Volatile<T>).get() as T | undefined
+  }
+  return value as T | undefined
+}
+
+/**
+ * Turn a row — live references or plain values — into validated plain options.
+ * @param row - the configured row.
+ * @returns the resolved options, defaults filled by the schema.
+ */
+export function resolveRow(row: Config | Options = {}): Required<Options> {
+  return ValueSchema({
+    cacheSeconds: readLive(row.cacheSeconds),
+    timeoutMs: readLive(row.timeoutMs),
+    refreshSeconds: readLive(row.refreshSeconds),
+  }) as Required<Options>
+}
 
 /** One provider's answer, as the browser half reads it. */
 export interface QuotaReport {
@@ -341,13 +396,11 @@ async function fetchAll(requests: readonly LocalRequest[], timeoutMs: number): P
  * @param ctx - host context carrying the route carrier.
  * @param config - this plugin's row configuration.
  */
-export function apply(ctx: HostContext, config: Config = {}): void {
-  // The row schema fills every default (even for an omitted row), so the
-  // reads below are plain: the schema is the single source of each default.
-  const validated = Config(config) as Required<Config>
-  const cacheSeconds = validated.cacheSeconds
-  const timeoutMs = validated.timeoutMs
-  const refreshMs = validated.refreshSeconds * 1_000
+export function apply(ctx: HostContext, row: Config | Options = {}): void {
+  // Read the row at every use: each field is volatile, so a save from the
+  // Plugins card has to reach the next reading rather than a mount-time copy.
+  const live = (): Required<Options> => resolveRow(row)
+  live()
   const cache = new Map<string, { at: number; body: string }>()
   const inflight = new Map<string, Promise<string>>()
 
@@ -371,13 +424,14 @@ export function apply(ctx: HostContext, config: Config = {}): void {
    * every poll.
    */
   const reportFor = (providerId: string, refresh: boolean): Promise<string> => {
+    const { cacheSeconds, timeoutMs, refreshSeconds } = live()
     const hit = cache.get(providerId)
     if (!refresh && hit !== undefined && Date.now() - hit.at < cacheSeconds * 1_000) {
       return Promise.resolve(hit.body)
     }
     const running = inflight.get(providerId)
     if (running !== undefined) return running
-    const pending = buildReport(ctx, providerId, timeoutMs, refreshMs).then((report) => {
+    const pending = buildReport(ctx, providerId, timeoutMs, refreshSeconds * 1_000).then((report) => {
       pruneReports()
       const body = JSON.stringify(report)
       cache.set(providerId, { at: Date.now(), body })
@@ -415,4 +469,16 @@ export function apply(ctx: HostContext, config: Config = {}): void {
     (): Disposable => ctx.webServer.register({ kind: 'exact', path: ROUTE, handler }),
     `quota-check: GET ${ROUTE}`,
   )
+
+  // A settings write moves the live references in place. Dropping the served
+  // readings makes the next poll show the effect of the edit instead of a body
+  // cached under the previous window, and the log line records what it became.
+  ctx.on('loader/volatile-update', () => {
+    cache.clear()
+    const { cacheSeconds, timeoutMs, refreshSeconds } = live()
+    ctx.logger.warn(
+      `quota-check: configuration updated — ${cacheSeconds}s cache, ${timeoutMs}ms deadline,`
+        + ` ${refreshSeconds}s browser refresh`,
+    )
+  })
 }

@@ -114,6 +114,14 @@ export interface HostContext {
   inject(dependencies: readonly string[], callback: (scope: HostContext) => void): unknown
   /** Bind a registration's lifetime to this plugin's fiber. */
   effect(callback: () => Disposable | void, label?: string): unknown
+  /**
+   * Subscribe to a host event. This plugin watches `loader/volatile-update`,
+   * which is what a settings write emits once the live row references moved.
+   * @param event - the event name.
+   * @param listener - the callback.
+   * @returns the disposer that removes this listener.
+   */
+  on(event: 'loader/volatile-update', listener: () => void): Disposable
   /** Read one optional service. */
   get(name: string): unknown
   /** Structured log surface. */

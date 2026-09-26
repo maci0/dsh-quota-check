@@ -109,8 +109,23 @@ test('the route refuses a provider it cannot answer for, over real HTTP', async 
 
 test('the exported Config carries every default and rejects a row outside its bounds', () => {
   // The Loader validates a bundle row against this schema, so the defaults and
-  // the bounds are the configuration contract, not a comment about one.
-  assert.deepEqual(QuotaCheck.Config({}), {
+  // the bounds are the configuration contract, not a comment about one. Every
+  // field is volatile, so the schema hands back live references.
+  const parsed = QuotaCheck.Config({}) as unknown as Record<string, { get(): unknown }>
+  assert.deepEqual(
+    {
+      cacheSeconds: parsed.cacheSeconds?.get(),
+      timeoutMs: parsed.timeoutMs?.get(),
+      refreshSeconds: parsed.refreshSeconds?.get(),
+    },
+    {
+      cacheSeconds: QuotaCheck.DEFAULT_CACHE_SECONDS,
+      timeoutMs: QuotaCheck.DEFAULT_TIMEOUT_MS,
+      refreshSeconds: QuotaCheck.DEFAULT_REFRESH_SECONDS,
+    },
+  )
+  // The plain schema the row resolver uses agrees with the loader-facing one.
+  assert.deepEqual(QuotaCheck.resolveRow({}), {
     cacheSeconds: QuotaCheck.DEFAULT_CACHE_SECONDS,
     timeoutMs: QuotaCheck.DEFAULT_TIMEOUT_MS,
     refreshSeconds: QuotaCheck.DEFAULT_REFRESH_SECONDS,

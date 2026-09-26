@@ -20,6 +20,7 @@
  *
  * @module dsh-quota-check
  */
+import type { Volatile } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
 import type { HostContext } from './host.ts';
 /** Plugin name as it appears in the loader. */
@@ -34,22 +35,49 @@ export declare const DEFAULT_CACHE_SECONDS = 60;
 export declare const DEFAULT_TIMEOUT_MS = 10000;
 /** Seconds the browser half waits between re-reads, unless configured otherwise. */
 export declare const DEFAULT_REFRESH_SECONDS = 300;
-/** Configuration accepted from this plugin's row in a profile patch. */
+/**
+ * Configuration this plugin's row resolves to, as `apply` receives it.
+ *
+ * Every field is `volatile()`, so the loader hands a live reference rather than
+ * a value: the settings document accepts writes only under a volatile node, and
+ * the Plugins page's Quota check card edits exactly these three. Each is read
+ * per request, so a save changes the next reading, cache window, and polling
+ * cadence without remounting the route.
+ */
 export interface Config {
     /** Seconds a reading stays cached. `0` re-asks on every request. @default 60 */
-    readonly cacheSeconds?: number;
+    readonly cacheSeconds: Volatile<number>;
     /** Per-request provider deadline in milliseconds. @default 10000 */
-    readonly timeoutMs?: number;
+    readonly timeoutMs: Volatile<number>;
     /** Seconds between the browser half's re-reads. @default 300 */
-    readonly refreshSeconds?: number;
+    readonly refreshSeconds: Volatile<number>;
 }
+/** Raw row values, as a profile patch states them and as direct callers pass them. */
+export type Options = {
+    [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : Config[K];
+};
 /**
- * Row schema: what Cordis validates this plugin's `config` against, and where
- * each default lives. Every value here is a deployment choice — the cadences
- * and the deadline vary by machine — so none is a constant only this plugin
- * could change.
+ * Row schema as Cordis resolves it: what this plugin's `config` is validated
+ * against, and where each default lives. Every value here is a deployment
+ * choice — the cadences and the deadline vary by machine — so none is a
+ * constant only this plugin could change, and all three are editable from the
+ * Plugins page.
  */
-export declare const Config: Schema<Config>;
+export declare const Config: Schema<Schemastery.ObjectS<NoInfer<{
+    cacheSeconds: Schema<number, number, "volatile-defined">;
+    timeoutMs: Schema<number, number, "volatile-defined">;
+    refreshSeconds: Schema<number, number, "volatile-defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    cacheSeconds: Schema<number, number, "volatile-defined">;
+    timeoutMs: Schema<number, number, "volatile-defined">;
+    refreshSeconds: Schema<number, number, "volatile-defined">;
+}>>, "plain">;
+/**
+ * Turn a row — live references or plain values — into validated plain options.
+ * @param row - the configured row.
+ * @returns the resolved options, defaults filled by the schema.
+ */
+export declare function resolveRow(row?: Config | Options): Required<Options>;
 /** One provider's answer, as the browser half reads it. */
 export interface QuotaReport {
     /** Route id the report belongs to. */
@@ -78,4 +106,4 @@ export interface QuotaReport {
  * @param ctx - host context carrying the route carrier.
  * @param config - this plugin's row configuration.
  */
-export declare function apply(ctx: HostContext, config?: Config): void;
+export declare function apply(ctx: HostContext, row?: Config | Options): void;
