@@ -183,7 +183,6 @@ http://127.0.0.1:3080/quota-check?provider=deepseek-official
 - **The subscription probes follow route identity** — a route must be named after the vendor or answer on the vendor's own host. A reseller that proxies Claude on `omniroute`'s host therefore shows nothing rather than the local Claude Code plan, and Vertex-hosted Claude (`google-vertex-anthropic`) is deliberately excluded.
 - **A rotated token is written to the CLI's own file** — the plugin refreshes Claude, Codex, and Grok credentials and writes them back atomically at mode 0600. That keeps the CLI signed in, but it means this plugin is a writer in `~/.claude`, `~/.codex`, and `~/.grok`. Cursor's session token has no refresh path at all.
 - **Cursor credential reading needs `node:sqlite`** — the IDE database fallback imports it dynamically, so a runtime without that built-in reads only `~/.config/cursor/auth.json` and reports no Cursor chip from the database alone.
-- **No settings card** — the three `Config` fields are changed from the profile patch, not from Settings. A card would need a settings namespace and a browser surface, which nothing here consumes yet.
 
 ## Licence
 

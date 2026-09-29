@@ -180,6 +180,16 @@ test('z.ai resolves to the coding-plan quota endpoint in both regions', () => {
   )
 })
 
+test('a lookalike host that merely ends with a vendor domain is not read as that vendor', () => {
+  // `evilopenrouter.ai` ends with `openrouter.ai` as text but is another
+  // registrable domain, so the OpenRouter credential must not be sent to it.
+  assert.equal(
+    resolveProbe('my-proxy', 'https://evilopenrouter.ai/v1')?.url,
+    'https://evilopenrouter.ai/key/info',
+  )
+  assert.equal(resolveProbe('my-proxy', 'https://xchatgpt.com/v1')?.local, undefined)
+})
+
 test('an unknown aggregator host is only ever asked for the LiteLLM key route', () => {
   assert.equal(resolveProbe('meta', 'https://api.meta.ai/v1')?.url, 'https://api.meta.ai/key/info')
   assert.equal(resolveProbe('vllm-local', 'http://192.168.0.211:8000/v1')?.url, 'http://192.168.0.211:8000/key/info')
@@ -231,6 +241,51 @@ test('a z.ai payload reports the fullest window plus every window', () => {
 test('a z.ai payload without quota windows reads as nothing', () => {
   assert.equal(resolveProbe('zai')?.parse([{ data: { limits: [] } }]), null)
   assert.equal(resolveProbe('zai')?.parse([{ code: 200, data: {} }]), null)
+})
+
+test('a Grok credits payload without a percentage reports nothing, not a measured zero', () => {
+  const probe = resolveProbe('grok')
+  // A `null` percentage is absent data, not a meter reading zero per cent.
+  assert.equal(
+    probe?.parse([{ config: { creditUsagePercent: null, currentPeriod: { type: 'WEEKLY' } } }]),
+    null,
+  )
+  assert.equal(probe?.parse([{ config: { isUnifiedBillingUser: true } }]), null)
+  // A payload that carries no figure drops out; a sibling meter still reports.
+  assert.equal(
+    probe?.parse([{ config: { creditUsagePercent: null } }, { config: { used: 100, monthlyLimit: 1000 } }])?.text,
+    'Grok 90%',
+  )
+})
+
+test('a DeepSeek balance too large for cent scaling is not reported as infinite', () => {
+  const reading = resolveProbe('deepseek-official')?.parse([
+    { balance_infos: [{ currency: 'CNY', total_balance: 1e308 }] },
+  ])
+  assert.equal(reading?.text, '¥1e+308')
+  assert.doesNotMatch(reading?.text ?? '', /Infinity/)
+})
+
+test('a reset instant outside the Date range is omitted, not spelled Invalid Date', () => {
+  const zai = resolveProbe('zai')?.parse([
+    { data: { limits: [{ type: 'TOKENS_LIMIT', percentage: 5, nextResetTime: 1e300 }] } },
+  ])
+  assert.equal(zai?.lines[0], 'Tokens 5% used')
+  const omniroute = resolveProbe('omniroute', 'http://box:20128/v1')?.parse([
+    { plan: 'p', quotas: { session: { total: 100, remainingPercentage: 10, resetAt: 1e300 } } },
+  ])
+  assert.equal(omniroute?.lines[0], 'p · Session 90% used')
+})
+
+test('a z.ai window percentage outside 0-100 is clamped, never a negative remainder', () => {
+  const over = resolveProbe('zai')?.parse([{ data: { limits: [{ type: 'TOKENS_LIMIT', percentage: 150 }] } }])
+  assert.equal(over?.text, 'GLM 0%')
+  assert.equal(over?.remaining, 0)
+  assert.equal(over?.lines[0], 'Tokens 100% used')
+  const under = resolveProbe('zai')?.parse([{ data: { limits: [{ type: 'TOKENS_LIMIT', percentage: -20 }] } }])
+  assert.equal(under?.text, 'GLM 100%')
+  assert.equal(under?.remaining, 100)
+  assert.equal(under?.lines[0], 'Tokens 0% used')
 })
 
 test('amounts are spelled with the currency the provider reports', () => {
