@@ -265,31 +265,40 @@ async function apiKeyOf(
  * @returns the report, never throwing: a failure is an `error` report.
  */
 async function buildReport(ctx: HostContext, providerId: string, timeoutMs: number, refreshMs: number): Promise<QuotaReport> {
-  // Resolved per miss, not cached: the miss is network-bound, and a profile
-  // cache would hide a settings edit (baseURL, displayName) for its whole TTL.
-  const config = providerConfigOf(ctx, providerId)
-  const displayName = config.displayName ?? providerId
-  const base = { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs }
-  const probe = resolveProbe(providerId, config.baseURL)
-  if (probe === undefined) {
-    return {
-      ...base,
-      status: 'unsupported',
-      message: 'no balance or quota endpoint is known for this provider',
-    }
-  }
-  const envNames = probe.envNames ?? []
+  let displayName = providerId
   try {
+    // Resolved per miss, not cached: the miss is network-bound, and a profile
+    // cache would hide a settings edit (baseURL, displayName) for its whole TTL.
+    const config = providerConfigOf(ctx, providerId)
+    displayName = config.displayName ?? providerId
+    const base = { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs }
+    const probe = resolveProbe(providerId, config.baseURL)
+    if (probe === undefined) {
+      return {
+        ...base,
+        status: 'unsupported',
+        message: 'no balance or quota endpoint is known for this provider',
+      }
+    }
+    const envNames = probe.envNames ?? []
     const local = probe.local
     let requests: readonly LocalRequest[]
     if (local === undefined) {
       const key = await apiKeyOf(ctx, config, envNames)
       if (key === undefined) {
-        return {
-          ...base,
-          status: 'error',
-          message: `no credential is configured for this route (${config.apiKeyEnv ?? envNames.join(' / ')})`,
-        }
+        // A missing credential is a broken setup on a route that names its
+        // vendor; on a guessed route it only means the host is not that product.
+        return probe.tentative === true
+          ? {
+            ...base,
+            status: 'unsupported',
+            message: 'no balance or quota endpoint this plugin recognizes, and no credential to read for it',
+          }
+          : {
+            ...base,
+            status: 'error',
+            message: `no credential is configured for this route (${config.apiKeyEnv ?? envNames.join(' / ')})`,
+          }
       }
       if (probe.requests !== undefined) {
         // The endpoint names ids only the provider knows: read its listing
@@ -327,6 +336,15 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
       if (retried.length > 0) outcome = await fetchAll(retried, timeoutMs)
     }
     if (!outcome.ok) {
+      // A 404 on a probe that only guessed the endpoint means the host does not
+      // publish it: absent data, not a reading that failed.
+      if (probe.tentative === true && outcome.status === 404) {
+        return {
+          ...base,
+          status: 'unsupported',
+          message: `${requests[0]?.url ?? providerId} is not on this host`,
+        }
+      }
       return {
         ...base,
         status: 'error',
@@ -347,7 +365,7 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { ...base, status: 'error', message }
+    return { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs, status: 'error', message }
   }
 }
 

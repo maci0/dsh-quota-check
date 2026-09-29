@@ -77,6 +77,12 @@ interface ProbeBase {
    */
   readonly requests?: ProbeExpander
   /**
+   * True when this probe is a guess about a host the route never named: an
+   * absent endpoint or an unconfigured credential then means the host is not
+   * that product, which is absent data rather than a failed reading.
+   */
+  readonly tentative?: boolean
+  /**
    * Turn the decoded payloads into a reading.
    * @param payloads - decoded JSON bodies, in request order.
    * @returns the reading, or `null` when none carries a usable figure.
@@ -741,9 +747,10 @@ function zaiProbe(origin: string): Probe {
 }
 
 /** LiteLLM key budget probe: the fallback shape for a proxy deployment. */
-function liteLlmProbe(origin: string): Probe {
+function liteLlmProbe(origin: string, tentative = false): Probe {
   return {
     kind: 'balance',
+    tentative,
     url: `${origin}/key/info`,
     envNames: [],
     parse: payloads => parseLiteLlmKeyInfo(payloads[0]),
@@ -836,7 +843,9 @@ export function resolveProbe(providerId: string, baseURL?: string): Probe | unde
   if (id.includes('omniroute')) return omnirouteProbe(originOf(baseURL, 'http://localhost:20128'))
   // An aggregator route: named after a model, a plan, or the proxy itself. The
   // one per-route figure such a host may carry is LiteLLM's key budget, and a
-  // host without that route answers 404, which renders as no chip.
+  // host without that route answers 404, which renders as no chip. The probe is
+  // tentative: a route that only guesses LiteLLM must stay silent when the host
+  // turns out to be something else.
   if (baseURL === undefined || unset || namesVendor(id)) return undefined
-  return liteLlmProbe(originOf(baseURL, baseURL))
+  return liteLlmProbe(originOf(baseURL, baseURL), true)
 }

@@ -113,6 +113,81 @@ test('an omniroute route reads its connection listing, then each connection quot
   }
 })
 
+test('a route whose host is not a LiteLLM proxy renders no chip, not a failure', async () => {
+  // The LiteLLM key-budget endpoint is a guess about a host the route never
+  // named: a 404 there means "this host is not a LiteLLM", which is absent
+  // data, not a failed reading. A local vLLM route must stay silent (README
+  // "local inference (vLLM) ... renders nothing"), not grow a `quota ?` chip.
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'vllm-local', displayName: 'vLLM', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'vllm-local'] }] },
+    settings: {
+      describe: () => [{
+        ns: 'llm-pi-ai',
+        value: { providers: { 'vllm-local': { apiKeyEnv: 'VLLM_API_KEY', baseURL: 'http://192.168.0.211:8000/v1' } } },
+      }],
+    },
+    credentials: { resolve: async () => ({ value: 'sk-local' }) },
+  })
+  const stub = stubFetch({}, { status: 404 })
+  try {
+    const reply = await request(route, `${ROUTE}?provider=vllm-local`)
+    assert.equal(stub.calls.length, 1, 'the guessed endpoint is still asked once')
+    assert.equal(reply.status, 200)
+    assert.equal((reply.body as { status: string }).status, 'unsupported')
+  } finally {
+    stub.restore()
+  }
+})
+
+test('an unconfigured credential on an unrecognized host renders no chip either', async () => {
+  // No credential at all is the other shape of the same guess: nothing on this
+  // route says LiteLLM, so there is nothing to report rather than a failure.
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'vllm-local', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'vllm-local'] }] },
+    settings: {
+      describe: () => [{ ns: 'llm-pi-ai', value: { providers: { 'vllm-local': { baseURL: 'http://192.168.0.211:8000/v1' } } } }],
+    },
+  })
+  const stub = stubFetch({})
+  try {
+    const reply = await request(route, `${ROUTE}?provider=vllm-local`)
+    assert.equal(stub.calls.length, 0)
+    assert.equal(reply.status, 200)
+    assert.equal((reply.body as { status: string }).status, 'unsupported')
+  } finally {
+    stub.restore()
+  }
+})
+
+test('a settings directory that throws is reported, not thrown out of the route', async () => {
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'deepseek-official', settingsNs: 'llm-deepseek', settingsPath: [] }] },
+    settings: { describe: () => { throw new Error('settings backend offline') } },
+  })
+  const reply = await request(route, `${ROUTE}?provider=deepseek-official`)
+  assert.equal(reply.status, 200)
+  assert.equal((reply.body as { status: string }).status, 'error')
+  assert.match(String((reply.body as { message: string }).message), /settings backend offline/)
+})
+
+test('a route that names LiteLLM still reports its missing endpoint as a failure', async () => {
+  // The tentative rule must not swallow a genuine failure on a route that does
+  // name LiteLLM: a 404 there is a broken deployment, not absent data.
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'litellm', settingsNs: 'llm-litellm', settingsPath: [] }] },
+    settings: { describe: () => [{ ns: 'llm-litellm', value: { apiKeyEnv: 'LITELLM_API_KEY' } }] },
+    credentials: { resolve: async () => ({ value: 'sk-proxy' }) },
+  })
+  const stub = stubFetch({}, { status: 404 })
+  try {
+    const reply = await request(route, `${ROUTE}?provider=litellm`)
+    assert.equal((reply.body as { status: string }).status, 'error')
+    assert.match(String((reply.body as { message: string }).message), /HTTP 404/)
+  } finally {
+    stub.restore()
+  }
+})
+
 test('a missing credential is an error report, not a provider call', async () => {
   const { route } = mount({ ...deepSeekServices(), credentials: { resolve: async () => undefined } })
   const stub = stubFetch({})

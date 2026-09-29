@@ -64,6 +64,12 @@ interface ProbeBase {
      */
     readonly requests?: ProbeExpander;
     /**
+     * True when this probe is a guess about a host the route never named: an
+     * absent endpoint or an unconfigured credential then means the host is not
+     * that product, which is absent data rather than a failed reading.
+     */
+    readonly tentative?: boolean;
+    /**
      * Turn the decoded payloads into a reading.
      * @param payloads - decoded JSON bodies, in request order.
      * @returns the reading, or `null` when none carries a usable figure.
