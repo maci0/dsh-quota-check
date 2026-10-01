@@ -419,6 +419,10 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
   live()
   const cache = new Map<string, { at: number; body: string }>()
   const inflight = new Map<string, Promise<string>>()
+  // Bumped by a settings write. A read that started before one belongs to the
+  // old row (its deadline and the `refreshMs` it reports), so it must not fill
+  // the cache the write just emptied.
+  let generation = 0
 
   /**
    * Keep the report map at its cap: once it holds `MAX_REPORTS`, the oldest key
@@ -447,13 +451,20 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
     }
     const running = inflight.get(providerId)
     if (running !== undefined) return running
+    const started = generation
     const pending = buildReport(ctx, providerId, timeoutMs, refreshSeconds * 1_000).then((report) => {
-      pruneReports()
       const body = JSON.stringify(report)
-      cache.set(providerId, { at: Date.now(), body })
+      // A write that landed mid-read emptied the cache; this body belongs to
+      // the row before it, so it is answered but not kept.
+      if (started === generation) {
+        pruneReports()
+        cache.set(providerId, { at: Date.now(), body })
+      }
       return body
     }).finally(() => {
-      inflight.delete(providerId)
+      // Only this read's own entry: after a write, a later poll may have
+      // installed its own read under the same key.
+      if (inflight.get(providerId) === pending) inflight.delete(providerId)
     })
     inflight.set(providerId, pending)
     return pending
@@ -491,9 +502,14 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
   // cached under the previous window, and the log line records what it became.
   ctx.on('loader/volatile-update', () => {
     cache.clear()
+    // A poll that starts after the write must read with the new row, so the
+    // reads the old row started stop being handed out. Their callers still get
+    // an answer.
+    inflight.clear()
+    generation += 1
     const { cacheSeconds, timeoutMs, refreshSeconds } = live()
     ctx.logger.warn(
-      `quota-check: configuration updated — ${cacheSeconds}s cache, ${timeoutMs}ms deadline,`
+      `quota-check: configuration updated: ${cacheSeconds}s cache, ${timeoutMs}ms deadline,`
         + ` ${refreshSeconds}s browser refresh`,
     )
   })

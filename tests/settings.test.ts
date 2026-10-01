@@ -126,3 +126,61 @@ test('a row outside the schema bounds still fails the write, not the read', () =
   assert.throws(() => Config({ timeoutMs: 0 }), /timeoutMs/)
   assert.throws(() => resolveRow({ cacheSeconds: -1 }), /cacheSeconds/)
 })
+
+test('a read in flight during a settings write is neither handed out, cached, nor allowed to evict its successor', async () => {
+  const state = { refreshSeconds: 300 }
+  const { route, emitVolatile } = mount({
+    llm: {
+      listConfigurableProviders: () => [
+        { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
+      ],
+    },
+    settings: { describe: () => [{ ns: 'llm-deepseek', value: { apiKeyEnv: 'TEST_KEY' } }] },
+    credentials: { resolve: async () => ({ value: 'sk-test' }) },
+  }, {
+    cacheSeconds: ref(() => 3600),
+    timeoutMs: ref(() => 10_000),
+    refreshSeconds: ref(() => state.refreshSeconds),
+  })
+  const original = globalThis.fetch
+  // Every answer waits for its own release, so two reads can be in flight at
+  // once and a third poll has something to coalesce onto.
+  const held: (() => void)[] = []
+  globalThis.fetch = (() => new Promise((resolve) => {
+    held.push(() => {
+      resolve(new Response(JSON.stringify({ balance_infos: [{ currency: 'USD', total_balance: '1' }] }), { status: 200 }))
+    })
+  })) as typeof globalThis.fetch
+  const url = '/quota-check?provider=deepseek-official'
+  const settle = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve) })
+  try {
+    const first = request(route, url)
+    await settle()
+    assert.equal(held.length, 1, 'the first read is in flight')
+
+    state.refreshSeconds = 45
+    emitVolatile()
+
+    // A poll after the write must not be handed the read the old row started.
+    const second = request(route, url)
+    await settle()
+    assert.equal(held.length, 2, 'the post-write poll started its own read')
+
+    // The orphaned read settles: it answers its caller, but neither caches its
+    // old-row body nor retracts the live read from the in-flight map.
+    held[0]?.()
+    assert.equal(((await first).body as { refreshMs: number }).refreshMs, 300_000)
+    const third = request(route, url)
+    await settle()
+    assert.equal(held.length, 2, 'a poll between reads joins the live read')
+
+    held[1]?.()
+    assert.equal(((await second).body as { refreshMs: number }).refreshMs, 45_000)
+    assert.equal(((await third).body as { refreshMs: number }).refreshMs, 45_000)
+    const cached = await request(route, url)
+    assert.equal((cached.body as { refreshMs: number }).refreshMs, 45_000, 'the cache holds the new row')
+    assert.equal(held.length, 2)
+  } finally {
+    globalThis.fetch = original
+  }
+})
