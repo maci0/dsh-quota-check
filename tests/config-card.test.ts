@@ -321,6 +321,35 @@ test('an emptied field is refused, not written as zero', async () => {
   assert.deepEqual(client.mutations, [])
 })
 
+
+test('a write in flight disables save and reset, so a double click writes once', async () => {
+  const client = createClient({ user: { cacheSeconds: 120 } })
+  client.apply()
+  const button = (tree: Tree, label: string): Element | undefined =>
+    findAll(tree, 'button').find((candidate) => textOf(candidate) === label)
+
+  let tree = setField(client, 'labelCacheSeconds', '45')
+  button(tree, 'save')?.props.onClick()
+  tree = client.render({ view: 'page' })
+  assert.equal(button(tree, 'save')?.props.disabled, true)
+  assert.equal(button(tree, 'reset')?.props.disabled, true)
+  // A second click that still reaches the handler is ignored too.
+  button(tree, 'save')?.props.onClick()
+  button(tree, 'reset')?.props.onClick()
+  await client.flush()
+  assert.equal(client.mutations.length, 1)
+
+  tree = client.render({ view: 'page' })
+  assert.equal(button(tree, 'save')?.props.disabled, false)
+  button(tree, 'reset')?.props.onClick()
+  tree = client.render({ view: 'page' })
+  assert.equal(button(tree, 'save')?.props.disabled, true)
+  assert.equal(button(tree, 'reset')?.props.disabled, true)
+  button(tree, 'reset')?.props.onClick()
+  await client.flush()
+  assert.equal(client.mutations.length, 2)
+  assert.equal(button(client.render({ view: 'page' }), 'reset')?.props.disabled, false)
+})
 test('the card version stays in lockstep with package.json', () => {
   assert.match(SOURCE, new RegExp(`const VERSION = '${PACKAGE.version.replace(/\./gu, '\\.')}'`))
 })
