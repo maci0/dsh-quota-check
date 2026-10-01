@@ -178,17 +178,19 @@ that endpoint per agent.
 
 ## Development
 
+dsh loads plugins on Node `^22.19.0 || >=24.0.0`; development and tests run on bun.
+
 ```sh
-npm install          # first run only (typescript, @types/node, cordis, carrier)
-npm run typecheck
-npm test             # probes, credentials, route, and the real-composition boot
-npm run build        # tsc -> lib/*.js
+bun install          # first run only (typescript, @types/node, cordis, carrier)
+bun run typecheck
+bun test             # probes, credentials, route, and the real-composition boot
+bun run build        # tsc -> lib/*.js
 ```
 
 For local development, `dsh plugin --profile <name> add <path-to-checkout>`
-(after `npm run build`), then restart `dsh web`.
+(after `bun run build`), then restart `dsh web`.
 
-`npm test` includes the real-composition case: the plugin mounts into a real
+`bun test` includes the real-composition case: the plugin mounts into a real
 Cordis `Context` beside the real HTTP carrier on an OS-assigned port, the route
 is driven over real HTTP, disposing the fiber must withdraw it, and no route
 exists until the trust fence is mounted.
