@@ -8,10 +8,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { ROUTE } from '../src/index.ts'
 import { mount, request, stubFetch, type Services } from './harness.ts'
+
+/** Gitignored scratch root at the repository root: temporary homes live here, never in /tmp. */
+const SCRATCH = fileURLToPath(new URL('../.scratch/', import.meta.url))
+mkdirSync(SCRATCH, { recursive: true })
 
 /** Services pointing at the DeepSeek balance endpoint. */
 function deepSeekServices(): Services {
@@ -244,7 +249,7 @@ test('a token endpoint that never answers cannot hold the reading past the deadl
   // The Codex token is expired, so the reading first rotates it. The token
   // host hangs; the reading must give up on it at the configured deadline and
   // read with the token it has, instead of holding the route open forever.
-  const home = await mkdtemp(join(tmpdir(), 'quota-check-test-'))
+  const home = await mkdtemp(join(SCRATCH, 'quota-check-test-'))
   const savedHome = process.env['HOME']
   const original = globalThis.fetch
   const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString('base64url')

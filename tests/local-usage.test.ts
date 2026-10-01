@@ -9,9 +9,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { localRequests } from '../src/local-usage.ts'
+
+/** Gitignored scratch root at the repository root: temporary homes live here, never in /tmp. */
+const SCRATCH = fileURLToPath(new URL('../.scratch/', import.meta.url))
+mkdirSync(SCRATCH, { recursive: true })
 
 /** Token-request deadline; the stubbed endpoints answer at once. */
 const TIMEOUT_MS = 1_000
@@ -48,7 +53,7 @@ function jwt(payload: unknown): string {
 
 /** A fresh temporary home directory, removed by the returned disposer. */
 async function temporaryHome(): Promise<{ home: string; dispose: () => Promise<void> }> {
-  const home = await mkdtemp(join(tmpdir(), 'quota-check-test-'))
+  const home = await mkdtemp(join(SCRATCH, 'quota-check-test-'))
   return { home, dispose: async () => { await rm(home, { recursive: true, force: true }) } }
 }
 
