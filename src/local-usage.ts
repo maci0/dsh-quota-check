@@ -7,8 +7,8 @@
  * to resolve: the token already sits on this machine, written by the CLI the
  * human signed into. This module is the port of `quota-widget`'s fetchers
  * (`~/Desktop/Projects/quota-widget/package/contents/code/fetch_quota.py`);
- * it keeps the observable behavior — file paths, expiry skews, refresh bodies,
- * and the write-back that keeps the CLI itself signed in — and drops the parts
+ * it keeps the observable behavior (file paths, expiry skews, refresh bodies,
+ * and the write-back that keeps the CLI itself signed in) and drops the parts
  * a statusbar chip does not need (disk caches, Retry-After sleeps, the TUI
  * JSON shape).
  *

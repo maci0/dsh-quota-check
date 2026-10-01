@@ -1,5 +1,5 @@
 /**
- * dsh-quota-check — one statusbar figure for the provider the current session
+ * dsh-quota-check: one statusbar figure for the provider the current session
  * is using: the remaining balance on a pure API-billing route, or the plan
  * quota on a subscription route.
  *
@@ -9,8 +9,8 @@
  *   serves one JSON reply from `GET /quota-check?provider=<id>`. That is the
  *   only way a browser half can reach a provider key: the key stays in this
  *   process, and the browser only ever sees the formatted figure.
- * - `lib/client.js` registers the chip in `conversation.composer.dock` — the
- *   statusbar row directly under the composer and its model selector — and
+ * - `lib/client.js` registers the chip in `conversation.composer.dock` (the
+ *   statusbar row directly under the composer and its model selector) and
  *   asks this route for the provider the session's model selection names.
  *
  * Which endpoints answer is `probes.ts`; the credential and the reading are
@@ -98,7 +98,7 @@ const ValueSchema = Schema.object({
 /**
  * Row schema as Cordis resolves it: what this plugin's `config` is validated
  * against, and where each default lives. Every value here is a deployment
- * choice — the cadences and the deadline vary by machine — so none is a
+ * choice (the cadences and the deadline vary by machine), so none is a
  * constant only this plugin could change, and all three are editable from the
  * Plugins page.
  */
@@ -126,7 +126,7 @@ function readLive<T>(value: T | Volatile<T> | undefined): T | undefined {
 }
 
 /**
- * Turn a row — live references or plain values — into validated plain options.
+ * Turn a row (live references or plain values) into validated plain options.
  * @param row - the configured row.
  * @returns the resolved options, defaults filled by the schema.
  */

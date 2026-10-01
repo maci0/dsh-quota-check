@@ -4,7 +4,7 @@
  *
  * A probe resolves from a provider id and an optional configured base URL, and
  * a parser turns a decoded JSON payload into a {@link ProbeReading}. Host-only
- * concerns — credentials, HTTP, caching — live in `index.ts`, which is what
+ * concerns (credentials, HTTP, caching) live in `index.ts`, which is what
  * makes these rules testable without a network. One exception: an endpoint whose
  * ids the configuration cannot name (OmniRoute asks per upstream connection)
  * declares `requests`, which reads the listing before the host asks each id.
@@ -14,7 +14,7 @@
  * `/key/info` (spend and remaining budget for the calling key). LiteLLM is also
  * the fallback for any otherwise-unknown route with a configured base URL,
  * because a proxy deployment names its routes after the models it serves, not
- * after the proxy — an unknown host that answers `/key/info` is a LiteLLM. A
+ * after the proxy: an unknown host that answers `/key/info` is a LiteLLM. A
  * route whose host publishes neither resolves no probe and the statusbar stays
  * empty.
  *
@@ -107,8 +107,8 @@ export declare function formatMoney(amount: number, currency?: string): string;
  * A configured base URL decides alone when it names a known host, because the
  * host is the endpoint that actually answers. The provider id only decides
  * when no base URL is configured (the route relies on its library's own
- * default), so a route named after a provider but pointed somewhere else — a
- * local vLLM serving DeepSeek weights, or Vertex-hosted Claude, say — is never
+ * default), so a route named after a provider but pointed somewhere else (a
+ * local vLLM serving DeepSeek weights, or Vertex-hosted Claude, say) is never
  * read from that provider's own subscription credential.
  *
  * The subscription probes come first among the id-based rules because their

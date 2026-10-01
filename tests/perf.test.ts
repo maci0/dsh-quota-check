@@ -2,7 +2,7 @@
  * Deterministic growth check for the host half's report cache.
  *
  * Wall clock is not asserted: it moves with turbo, neighbours, and the
- * container's CPU quota. This case counts work instead — provider fetches —
+ * container's CPU quota. This case counts work instead (provider fetches),
  * which is what the `MAX_REPORTS` cap exists to bound. A long-lived host that
  * is asked about one route id per model ever picked must not keep a report for
  * every id forever: past the cap the oldest entries go, so asking for one of

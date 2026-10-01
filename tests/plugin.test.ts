@@ -1,8 +1,8 @@
 /**
  * Host half: the route the browser half reads, driven through the same public
- * `apply` a composition calls. The fake context carries only the services this
- * plugin declares structurally, so these cases fail if the plugin starts
- * needing a service a bare composition does not mount.
+ * `apply` a composition calls. The fake context carries the injected services
+ * plus only the optional ones a case mounts, so these cases fail if the plugin
+ * starts needing a service it does not inject.
  */
 
 import assert from 'node:assert/strict'
