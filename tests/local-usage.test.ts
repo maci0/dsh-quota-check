@@ -13,6 +13,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { localRequests } from '../src/local-usage.ts'
 
+/** Token-request deadline; the stubbed endpoints answer at once. */
+const TIMEOUT_MS = 1_000
+
 /** One stubbed HTTP response. */
 interface StubResponse {
   status: number
@@ -62,7 +65,7 @@ test('a live Claude Code token becomes the usage request, with Claude Code heade
       claudeAiOauth: { accessToken: 'live-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 },
       otherField: 'kept',
     })
-    const requests = await localRequests('claude', { home })
+    const requests = await localRequests('claude', { home, timeoutMs: TIMEOUT_MS })
     assert.equal(requests.length, 1)
     assert.equal(requests[0]?.url, 'https://api.anthropic.com/api/oauth/usage')
     assert.equal(requests[0]?.headers['authorization'], 'Bearer live-token')
@@ -87,7 +90,7 @@ test('an expired Claude token rotates in place and keeps every other field', asy
       claudeAiOauth: { accessToken: 'stale', refreshToken: 'r', expiresAt: Date.now() - 1_000 },
       subscriptionType: 'max',
     })
-    const requests = await localRequests('claude', { home })
+    const requests = await localRequests('claude', { home, timeoutMs: TIMEOUT_MS })
     assert.equal(stub.calls.length, 1)
     assert.equal(requests[0]?.headers['authorization'], 'Bearer rotated')
     const stored = JSON.parse(await readFile(path, 'utf8')) as {
@@ -124,7 +127,7 @@ test('an expired Codex token rotates, and the account id rides every request', a
       },
       other: true,
     })
-    const requests = await localRequests('codex', { home })
+    const requests = await localRequests('codex', { home, timeoutMs: TIMEOUT_MS })
     assert.equal(stub.calls.length, 1)
     assert.equal(requests[0]?.url, 'https://chatgpt.com/backend-api/wham/usage')
     assert.equal(requests[0]?.headers['chatgpt-account-id'], accountId)
@@ -151,7 +154,7 @@ test('Grok reads the newest account entry and asks both billing meters', async (
       'old::client-a': { key: 'token-old', expires_at: '2026-01-01T00:00:00Z' },
       'new::client-b': { key: 'token-new', refresh_token: 'r', expires_at: '2030-01-01T00:00:00Z' },
     })
-    const requests = await localRequests('grok', { home })
+    const requests = await localRequests('grok', { home, timeoutMs: TIMEOUT_MS })
     assert.deepEqual(requests.map(request => request.url), [
       'https://cli-chat-proxy.grok.com/v1/billing?format=credits',
       'https://cli-chat-proxy.grok.com/v1/billing',
@@ -184,7 +187,7 @@ test('an expired Grok token is refreshed through the discovered OIDC endpoint', 
         expires_at: '2020-01-01T00:00:00Z',
       },
     })
-    const requests = await localRequests('grok', { home })
+    const requests = await localRequests('grok', { home, timeoutMs: TIMEOUT_MS })
     assert.deepEqual(stub.calls, [
       'https://auth.x.ai/.well-known/openid-configuration',
       'https://auth.x.ai/oauth2/token',
@@ -207,7 +210,7 @@ test('Cursor sends its session cookie built from the token subject', async () =>
     await writeCredential(join(home, '.config', 'cursor', 'auth.json'), {
       accessToken: jwt({ sub: 'auth0|user_01abc' }),
     })
-    const requests = await localRequests('cursor', { home })
+    const requests = await localRequests('cursor', { home, timeoutMs: TIMEOUT_MS })
     assert.equal(requests[0]?.url, 'https://cursor.com/api/usage-summary')
     const cookie = String(requests[0]?.headers['cookie'])
     assert.match(cookie, /^WorkosCursorSessionToken=user_01abc%3A%3A/)
@@ -224,7 +227,7 @@ test('a machine with no CLI credential asks nothing', async () => {
   try {
     delete process.env['CURSOR_AUTH_JSON']
     for (const provider of ['claude', 'codex', 'grok', 'cursor'] as const) {
-      assert.deepEqual(await localRequests(provider, { home }), [], provider)
+      assert.deepEqual(await localRequests(provider, { home, timeoutMs: TIMEOUT_MS }), [], provider)
     }
   } finally {
     if (previous !== undefined) process.env['CURSOR_AUTH_JSON'] = previous

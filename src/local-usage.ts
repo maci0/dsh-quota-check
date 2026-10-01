@@ -41,6 +41,8 @@ export interface LocalOptions {
   readonly home?: string
   /** Refresh even when the token looks unexpired; the 401 retry path uses this. */
   readonly forceRefresh?: boolean
+  /** Deadline for each token-endpoint request, in milliseconds. */
+  readonly timeoutMs: number
 }
 
 /** This plugin's own User-Agent for token endpoints. */
@@ -130,9 +132,10 @@ async function requestToken(
   url: string,
   headers: Record<string, string>,
   body: string,
+  timeoutMs: number,
 ): Promise<{ status: number; body?: Record<string, unknown> }> {
   try {
-    const response = await fetch(url, { method: 'POST', headers, body })
+    const response = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) return { status: response.status }
     return { status: response.status, body: record(await response.json().catch(() => undefined)) }
   } catch {
@@ -149,9 +152,10 @@ function formBody(fields: Readonly<Record<string, string>>): string {
  * Claude Code's OAuth credential and usage request.
  * @param home - home directory holding `.claude`.
  * @param force - refresh even when the token looks live.
+ * @param timeoutMs - deadline for each token-endpoint request.
  * @returns the usage request, or `[]` when no credential is usable.
  */
-async function claudeRequests(home: string, force: boolean): Promise<readonly LocalRequest[]> {
+async function claudeRequests(home: string, force: boolean, timeoutMs: number): Promise<readonly LocalRequest[]> {
   const path = join(home, ...CLAUDE_CREDENTIALS)
   let credentials = await readJson(path)
   let oauth = record(record(credentials)?.['claudeAiOauth'])
@@ -176,7 +180,7 @@ async function claudeRequests(home: string, force: boolean): Promise<readonly Lo
           'content-type': 'application/json',
           accept: 'application/json',
           'user-agent': USER_AGENT,
-        }, body)
+        }, body, timeoutMs)
         // A refused refresh is a refused refresh: the second host would answer
         // the same, and Anthropic counts the attempts.
         if (rotated.status === 400 || rotated.status === 401) break
@@ -212,9 +216,10 @@ async function claudeRequests(home: string, force: boolean): Promise<readonly Lo
  * Codex (ChatGPT subscription) credential and usage request.
  * @param home - home directory holding `.codex`.
  * @param force - refresh even when the token looks live.
+ * @param timeoutMs - deadline for each token-endpoint request.
  * @returns the usage request, or `[]` when no credential is usable.
  */
-async function codexRequests(home: string, force: boolean): Promise<readonly LocalRequest[]> {
+async function codexRequests(home: string, force: boolean, timeoutMs: number): Promise<readonly LocalRequest[]> {
   const path = join(home, ...CODEX_AUTH)
   let auth = record(await readJson(path))
   if (auth === undefined) return []
@@ -236,7 +241,7 @@ async function codexRequests(home: string, force: boolean): Promise<readonly Loc
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: CODEX_CLIENT_ID,
-    }))
+    }), timeoutMs)
     const rotatedAccess = stringOf(rotated.body?.['access_token'])
     if (rotatedAccess !== undefined) {
       const nextTokens: Record<string, unknown> = { ...tokens, access_token: rotatedAccess }
@@ -281,9 +286,10 @@ function newestGrokEntry(store: Record<string, unknown>): { key: string; entry: 
  * Grok's OIDC credential and the two billing meters (weekly credits, monthly spend).
  * @param home - home directory holding `.grok`.
  * @param force - refresh even when the token looks live.
+ * @param timeoutMs - deadline for each token-endpoint request.
  * @returns the billing requests, or `[]` when no credential is usable.
  */
-async function grokRequests(home: string, force: boolean): Promise<readonly LocalRequest[]> {
+async function grokRequests(home: string, force: boolean, timeoutMs: number): Promise<readonly LocalRequest[]> {
   const path = join(home, ...GROK_AUTH)
   const store = record(await readJson(path))
   if (store === undefined) return []
@@ -302,6 +308,7 @@ async function grokRequests(home: string, force: boolean): Promise<readonly Loca
     let rotated: { status: number; body?: Record<string, unknown> } = { status: 0 }
     try {
       const discovery = record(await (await fetch(GROK_OIDC_DISCOVERY, {
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { accept: 'application/json', 'user-agent': USER_AGENT },
       })).json())
       const tokenUrl = stringOf(discovery?.['token_endpoint'])
@@ -314,7 +321,7 @@ async function grokRequests(home: string, force: boolean): Promise<readonly Loca
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
           client_id: clientId,
-        }))
+        }), timeoutMs)
       }
     } catch {
       rotated = { status: 0 }
@@ -438,19 +445,19 @@ async function cursorRequests(home: string): Promise<readonly LocalRequest[]> {
 /**
  * Build the outbound requests for one subscription provider.
  * @param provider - which CLI credential to read.
- * @param options - home directory and forced-refresh flag.
+ * @param options - home directory, forced-refresh flag, and token-request deadline.
  * @returns one or two requests, or `[]` when nothing usable is on disk.
  */
 export async function localRequests(
   provider: LocalProvider,
-  options: LocalOptions = {},
+  options: LocalOptions,
 ): Promise<readonly LocalRequest[]> {
   const home = options.home ?? homedir()
   const force = options.forceRefresh === true
   switch (provider) {
-    case 'claude': return await claudeRequests(home, force)
-    case 'codex': return await codexRequests(home, force)
-    case 'grok': return await grokRequests(home, force)
+    case 'claude': return await claudeRequests(home, force, options.timeoutMs)
+    case 'codex': return await codexRequests(home, force, options.timeoutMs)
+    case 'grok': return await grokRequests(home, force, options.timeoutMs)
     case 'cursor': return await cursorRequests(home)
   }
 }
