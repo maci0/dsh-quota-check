@@ -170,7 +170,8 @@ test('a settings directory that throws is reported, not thrown out of the route'
   const reply = await request(route, `${ROUTE}?provider=deepseek-official`)
   assert.equal(reply.status, 200)
   assert.equal((reply.body as { status: string }).status, 'error')
-  assert.match(String((reply.body as { message: string }).message), /settings backend offline/)
+  // The cause goes to the host log; the report carries this plugin's sentence.
+  assert.equal((reply.body as { message: string }).message, 'the reading failed; the host log names the cause')
 })
 
 test('a route that names LiteLLM still reports its missing endpoint as a failure', async () => {
@@ -311,5 +312,24 @@ test('an omniroute connection id of . or .. is never asked', async () => {
     ])
   } finally {
     globalThis.fetch = original
+  }
+})
+
+test('a failure outside this plugin is reported without its raw text', async () => {
+  // A credential store may phrase a failure with host paths or internals; the
+  // report (and the chip tooltip) carries this plugin's own sentence instead.
+  const { route } = mount({
+    ...deepSeekServices(),
+    credentials: { resolve: async () => { throw new Error('keyring /home/u/.vault locked') } },
+  })
+  const stub = stubFetch({})
+  try {
+    const reply = await request(route, `${ROUTE}?provider=deepseek-official`)
+    const body = reply.body as { status: string; message: string }
+    assert.equal(body.status, 'error')
+    assert.doesNotMatch(body.message, /keyring|vault/)
+    assert.equal(stub.calls.length, 0)
+  } finally {
+    stub.restore()
   }
 })

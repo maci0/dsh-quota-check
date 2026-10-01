@@ -362,8 +362,17 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
       lines: reading.lines,
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs, status: 'error', message }
+    // Another service's exception text (credentials, settings, a parser) may
+    // name host paths or internals, so it stays in the host log.
+    ctx.logger.warn(`quota-check: the ${providerId} reading failed (${String(error)})`)
+    return {
+      provider: providerId,
+      displayName,
+      fetchedAt: Date.now(),
+      refreshMs,
+      status: 'error',
+      message: 'the reading failed; the host log names the cause',
+    }
   }
 }
 
