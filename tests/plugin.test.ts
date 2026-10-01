@@ -333,3 +333,27 @@ test('a failure outside this plugin is reported without its raw text', async () 
     stub.restore()
   }
 })
+
+test('a base URL without an http(s) scheme is a configuration error, and nothing is sent', async () => {
+  // `api.deepseek.com` or `box:20128` has no scheme: guessing an origin would
+  // send the key somewhere nobody configured, and `new URL` gives "null".
+  for (const [provider, baseURL] of [['deepseek-official', 'api.deepseek.com'], ['omniroute', 'box:20128'], ['claude', 'ftp://anthropic']] as const) {
+    const resolved: string[] = []
+    const { route } = mount({
+      llm: { listConfigurableProviders: () => [{ provider, settingsNs: 'llm-x', settingsPath: [] }] },
+      settings: { describe: () => [{ ns: 'llm-x', value: { apiKeyEnv: 'TEST_KEY', baseURL } }] },
+      credentials: { resolve: async (ref: string) => { resolved.push(ref); return { value: 'sk-test' } } },
+    })
+    const stub = stubFetch({})
+    try {
+      const reply = await request(route, `${ROUTE}?provider=${provider}`)
+      const body = reply.body as { status: string; message: string }
+      assert.equal(body.status, 'error', provider)
+      assert.match(body.message, /baseURL is not an absolute http\(s\) URL/, provider)
+      assert.equal(stub.calls.length, 0, `${provider}: no request`)
+      assert.deepEqual(resolved, [], `${provider}: no credential resolved`)
+    } finally {
+      stub.restore()
+    }
+  }
+})
