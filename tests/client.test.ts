@@ -7,11 +7,32 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const bundlePath = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'client.js')
+/** What the bundle hands `window.__ModuleLoader__.load`. */
+interface Registration {
+  id: string
+  factory: (require: (id: string) => unknown) => Record<string, unknown>
+}
+
+/**
+ * Import `lib/client.js` once and capture the registration it hands
+ * `window.__ModuleLoader__`, exactly as the module system receives it in the
+ * page. Each mount then calls the captured factory, which builds fresh state.
+ */
+async function importRegistration(): Promise<Registration | undefined> {
+  let registration: Registration | undefined
+  const scope = globalThis as { window?: unknown }
+  const previous = scope.window
+  scope.window = { __ModuleLoader__: { load: (spec: Registration): void => { registration = spec } } }
+  try {
+    await import(new URL('../lib/client.js', import.meta.url).href)
+  } finally {
+    scope.window = previous
+  }
+  return registration
+}
+
+const REGISTRATION = await importRegistration()
 
 /** One rendered element. */
 interface Element {
@@ -97,9 +118,8 @@ function mount(): {
       },
     },
   }
-  let loaded: { id: string; factory: (require: (id: string) => unknown) => Record<string, unknown> } | undefined
+  const loaded = REGISTRATION
   const appended: { textContent: string }[] = []
-  const windowStub = { __ModuleLoader__: { load: (registration: typeof loaded): void => { loaded = registration } } }
   const documentStub = {
     createElement: (): { textContent: string } => ({ textContent: '' }),
     head: { append: (element: { textContent: string }): void => { appended.push(element) } },
@@ -108,10 +128,18 @@ function mount(): {
     assert.equal(id, 'react', `the bundle may only require react, got ${id}`)
     return runtime.react
   }
-  new Function('window', 'require', 'document', readFileSync(bundlePath, 'utf8'))(windowStub, requireFn, documentStub)
   assert.ok(loaded, 'the bundle registered itself on window.__ModuleLoader__')
   assert.equal(loaded.id, 'dsh-quota-check')
-  const exported = loaded.factory(requireFn)
+  // The factory appends its stylesheet while it materializes, so the page's
+  // document exists for exactly that call.
+  const scope = globalThis as { document?: unknown }
+  scope.document = documentStub
+  let exported: Record<string, unknown>
+  try {
+    exported = loaded.factory(requireFn)
+  } finally {
+    delete scope.document
+  }
   // The chip must land under the model selector: pushed right by the auto left
   // margin, then pulled back by the composer card's own inset plus the send
   // control, and the pill radius must pair with the corner-shape rule.

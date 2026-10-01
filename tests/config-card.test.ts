@@ -1,8 +1,8 @@
 /**
  * Browser half: the Quota check card on the Plugins page.
  *
- * The file is evaluated the way the client module system evaluates it — a
- * lazy-CJS factory registered on `window.__ModuleLoader__` — over a minimal
+ * The file is imported and its lazy-CJS factory captured from
+ * `window.__ModuleLoader__`, as the client module system receives it, over a minimal
  * React (element trees plus two hooks) and a fake browser plugin context, so
  * the form's validation and its settings operations are checked without a DOM.
  *
@@ -42,13 +42,30 @@ function createReact(): { hooks: { cells: any[]; index: number }; createElement:
   }
 }
 
-/** Load `lib/client.js` through the module loader and return its exports. */
-function loadClient(): { registration: any; exports: any; React: ReturnType<typeof createReact> } {
+/**
+ * Import `lib/client.js` once and capture the registration it hands
+ * `window.__ModuleLoader__`, exactly as the module system receives it in the
+ * page. Each case then calls the captured factory, which builds fresh state.
+ */
+async function importRegistration(): Promise<any> {
   let registration: any
-  const window = { __ModuleLoader__: { load: (spec: any) => { registration = spec } } }
-  // The file is a script, not a module: it registers itself, exactly as the
-  // module system evaluates it in the page.
-  new Function('window', SOURCE)(window)
+  const scope = globalThis as { window?: unknown }
+  const previous = scope.window
+  scope.window = { __ModuleLoader__: { load: (spec: any) => { registration = spec } } }
+  try {
+    await import(new URL('../lib/client.js', import.meta.url).href)
+  } finally {
+    scope.window = previous
+  }
+  assert.ok(registration, 'lib/client.js registered itself on window.__ModuleLoader__')
+  return registration
+}
+
+const REGISTRATION = await importRegistration()
+
+/** Run the captured factory and return its exports. */
+function loadClient(): { registration: any; exports: any; React: ReturnType<typeof createReact> } {
+  const registration = REGISTRATION
   const React = createReact()
   const exports = registration.factory((id: string) => {
     assert.equal(id, 'react')
