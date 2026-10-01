@@ -7,32 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-
-/** What the bundle hands `window.__ModuleLoader__.load`. */
-interface Registration {
-  id: string
-  factory: (require: (id: string) => unknown) => Record<string, unknown>
-}
-
-/**
- * Import `lib/client.js` once and capture the registration it hands
- * `window.__ModuleLoader__`, exactly as the module system receives it in the
- * page. Each mount then calls the captured factory, which builds fresh state.
- */
-async function importRegistration(): Promise<Registration | undefined> {
-  let registration: Registration | undefined
-  const scope = globalThis as { window?: unknown }
-  const previous = scope.window
-  scope.window = { __ModuleLoader__: { load: (spec: Registration): void => { registration = spec } } }
-  try {
-    await import(new URL('../lib/client.js', import.meta.url).href)
-  } finally {
-    scope.window = previous
-  }
-  return registration
-}
-
-const REGISTRATION = await importRegistration()
+import { REGISTRATION } from './client-bundle.ts'
 
 /** One rendered element. */
 interface Element {
