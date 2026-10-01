@@ -138,6 +138,17 @@ export function resolveRow(row: Config | Options = {}): Required<Options> {
   }) as Required<Options>
 }
 
+/**
+ * What a provider route's base URL must start with: an http(s) scheme and a
+ * host. A scheme-less `box:20128` parses as a URL whose origin is "null".
+ */
+const BASE_URL_PATTERN = /^https?:\/\/[^\s/?#]+/iu
+
+/** Whether a configured base URL is an absolute http(s) URL. */
+function isHttpUrl(baseURL: string): boolean {
+  return BASE_URL_PATTERN.test(baseURL) && URL.canParse(baseURL)
+}
+
 /** One provider's answer, as the browser half reads it. */
 export interface QuotaReport {
   /** Route id the report belongs to. */
@@ -270,6 +281,16 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
     const config = providerConfigOf(ctx, providerId)
     displayName = config.displayName ?? providerId
     const base = { provider: providerId, displayName, fetchedAt: Date.now(), refreshMs }
+    // The route's baseURL belongs to another plugin's row, so it is checked
+    // here, at first use: no origin is guessed for a malformed one, and no
+    // credential is resolved or sent.
+    if (config.baseURL !== undefined && !isHttpUrl(config.baseURL)) {
+      return {
+        ...base,
+        status: 'error',
+        message: 'this route\'s baseURL is not an absolute http(s) URL; fix the provider row',
+      }
+    }
     const probe = resolveProbe(providerId, config.baseURL)
     if (probe === undefined) {
       return {

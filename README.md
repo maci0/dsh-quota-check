@@ -120,7 +120,10 @@ broken setup behind "nothing to show". Clicking it retries.
 - **Probes** (`src/probes.ts`) are the pure rules: which endpoint answers for a
   route, and how its payload becomes the chip text and tooltip lines. A route's
   configured base URL decides when it names a known host; the provider id only
-  decides when no base URL is configured. That distinction is what keeps
+  decides when no base URL is configured. A configured base URL that is not an
+  absolute http(s) URL (`box:20128`, `api.deepseek.com`) is reported as a
+  configuration error before any probe is chosen, so no origin is guessed and no
+  credential is resolved or sent. That distinction is what keeps
   `google-vertex-anthropic` (host `*.googleapis.com`) away from the Claude Code
   subscription credential while a bare `anthropic` route reads it. A route that
   names no known vendor and still has a base URL is asked for a LiteLLM key
