@@ -62,6 +62,17 @@ export const DEFAULT_REFRESH_SECONDS = 300
 /** Live report entries one host keeps before it starts evicting. */
 const MAX_REPORTS = 512
 
+/** Longest provider route id the route accepts. */
+const MAX_PROVIDER_ID_LENGTH = 128
+
+/**
+ * Shape of a provider route id. The harness's built-in routes are lowercase
+ * and hyphenated (`deepseek-official`, `zai-coding-cn`); a profile's own route
+ * keys are user-chosen, so `_`, `.` and capitals are admitted too (the z.ai
+ * probe already recognizes `z_ai`).
+ */
+const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
+
 /**
  * Configuration this plugin's row resolves to, as `apply` receives it.
  *
@@ -516,6 +527,14 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
     const providerId = params.get('provider') ?? ''
     if (providerId.length === 0) {
       sendJson(res, 400, { status: 'error', message: 'a provider query parameter is required' })
+      return
+    }
+    // Checked before the id keys the cache or reaches any lookup.
+    if (providerId.length > MAX_PROVIDER_ID_LENGTH || !PROVIDER_ID_PATTERN.test(providerId)) {
+      sendJson(res, 400, {
+        status: 'error',
+        message: `the provider query parameter must be a route id: letters, digits, ".", "_" or "-", at most ${String(MAX_PROVIDER_ID_LENGTH)} characters`,
+      })
       return
     }
     const body = await reportFor(providerId, params.get('refresh') === '1')

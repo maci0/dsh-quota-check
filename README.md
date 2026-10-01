@@ -108,7 +108,10 @@ broken setup behind "nothing to show". Clicking it retries.
   provider, and returns one JSON report. The provider key never leaves this
   process; readings are cached for `cacheSeconds` per provider, so a rerender, a
   session switch, or a second tab never multiplies provider traffic.
-  `?refresh=1` forces a fresh read. A settings write drops the cache, and a read
+  `?refresh=1` forces a fresh read. A `provider` that is not a route id (ASCII
+  letters, digits, `.`, `_` or `-`, starting with a letter or digit, at most 128
+  characters) is answered 400 before it keys the cache or reaches any lookup.
+  A settings write drops the cache, and a read
   that was in flight during the write answers its caller but is neither cached
   nor handed to later polls.
 - **Browser half** (`lib/client.js`) reads `modelSelection` from the session's

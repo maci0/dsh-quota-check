@@ -362,3 +362,24 @@ test('a base URL without an http(s) scheme is a configuration error, and nothing
     }
   }
 })
+
+test('a provider id outside the route-id shape is refused before it reaches the cache', async () => {
+  let looked = 0
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => { looked += 1; return [] } },
+  })
+  for (const provider of ['a'.repeat(129), 'deep seek', '../etc', 'x/y', '-lead', 'é', 'a\u0000b']) {
+    const reply = await request(route, `${ROUTE}?provider=${encodeURIComponent(provider)}`)
+    assert.equal(reply.status, 400, JSON.stringify(provider))
+    assert.equal((reply.body as { message: string }).message,
+      'the provider query parameter must be a route id: letters, digits, ".", "_" or "-", at most 128 characters')
+  }
+  assert.equal(looked, 0, 'no refused id was looked up, read, or cached')
+
+  // The longest accepted id and the spellings profile keys use still read.
+  for (const provider of ['a'.repeat(128), 'z_ai', 'deepseek-official', 'Local.vLLM']) {
+    const reply = await request(route, `${ROUTE}?provider=${provider}`)
+    assert.equal(reply.status, 200, provider)
+  }
+  assert.equal(looked, 4)
+})
