@@ -452,7 +452,9 @@ export async function localRequests(
   provider: LocalProvider,
   options: LocalOptions,
 ): Promise<readonly LocalRequest[]> {
-  const home = options.home ?? homedir()
+  // `$HOME` first: node's homedir() reads it on every call, but bun's caches
+  // the value at startup, so a later change (a test's scratch home) is missed.
+  const home = options.home ?? (process.env['HOME'] || homedir())
   const force = options.forceRefresh === true
   switch (provider) {
     case 'claude': return await claudeRequests(home, force, options.timeoutMs)
