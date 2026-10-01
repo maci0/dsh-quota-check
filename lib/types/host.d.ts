@@ -84,7 +84,7 @@ export interface WebServerLike {
      */
     register(route: WebRouteLike): Disposable;
 }
-/** The composition's trust fence, when one is mounted. */
+/** The composition's trust fence. */
 export interface ConnectionLike {
     /**
      * Reject an untrusted or unauthenticated request.
@@ -98,13 +98,12 @@ export interface ConnectionLike {
 /**
  * Structural view of the Cordis context the host half uses.
  *
- * `inject` below guarantees `webServer`; everything else is optional and read
- * through `get`, so a composition without the settings, credentials, or LLM
- * seam degrades to "no figure to report" instead of failing to mount.
+ * `inject` guarantees `webServer` and `connection`; everything else is
+ * optional and read through `get`, so a composition without the settings,
+ * credentials, or LLM seam degrades to "no figure to report" instead of
+ * failing to mount.
  */
 export interface HostContext {
-    /** Run `callback` when the named services are available. */
-    inject(dependencies: readonly string[], callback: (scope: HostContext) => void): unknown;
     /** Bind a registration's lifetime to this plugin's fiber. */
     effect(callback: () => Disposable | void, label?: string): unknown;
     /**
@@ -124,4 +123,6 @@ export interface HostContext {
     };
     /** HTTP route carrier (guaranteed by `inject`). */
     readonly webServer: WebServerLike;
+    /** Trust fence the route checks first (guaranteed by `inject`). */
+    readonly connection: ConnectionLike;
 }

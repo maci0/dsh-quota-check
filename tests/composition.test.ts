@@ -3,9 +3,9 @@
  * plugin is mounted into a real Cordis `Context` beside the real HTTP carrier
  * (`@deepseek-ai/dsh-host-webserver`) on an OS-assigned port, and the route is
  * driven over real HTTP rather than through a captured handler object. Only the
- * provider call itself is stubbed — that is the expensive, nondeterministic
- * boundary the policy allows to be mocked — so routing, JSON encoding, the
- * trust fence's absence, and teardown run against the shipping implementation.
+ * provider call itself is stubbed (the expensive, nondeterministic boundary
+ * the policy allows to be mocked), so routing, JSON encoding, the trust fence,
+ * and teardown run against the shipping implementation.
  *
  * The spec owns its port: the carrier is mounted on port 0 and disposed in the
  * test body, so nothing is left listening and no fixed port can collide with a
@@ -63,6 +63,7 @@ test('the plugin mounts, answers over real HTTP, and withdraws its route on disp
     ctx.provide('credentials', {
       resolve: async (ref: string) => (ref === 'TEST_KEY' ? { value: 'sk-test' } : undefined),
     })
+    ctx.provide('connection', { requestRejection: () => undefined })
 
     const plugin = await ctx.plugin(QuotaCheck as unknown as Parameters<typeof ctx.plugin>[0], {
       cacheSeconds: 0,
@@ -98,10 +99,29 @@ test('the route refuses a provider it cannot answer for, over real HTTP', async 
   const carrier = await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
   try {
     const server = ctx.get('webServer') as unknown as { port: number }
+    ctx.provide('connection', { requestRejection: () => undefined })
     await ctx.plugin(QuotaCheck as unknown as Parameters<typeof ctx.plugin>[0], {})
     const reply = await get(`http://127.0.0.1:${String(server.port)}/quota-check`)
     assert.equal(reply.status, 400)
     assert.equal((reply.body as { message: string }).message, 'a provider query parameter is required')
+  } finally {
+    await carrier.dispose()
+  }
+})
+
+test('the route does not answer until the composition mounts its trust fence', async () => {
+  const ctx = new Context()
+  const carrier = await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+  try {
+    const server = ctx.get('webServer') as unknown as { port: number }
+    await ctx.plugin(QuotaCheck as unknown as Parameters<typeof ctx.plugin>[0], {})
+    const url = `http://127.0.0.1:${String(server.port)}/quota-check?provider=vllm`
+    // Without `connection` nothing would refuse a cross-origin or
+    // unauthenticated caller, so the route must not exist at all.
+    assert.equal((await get(url)).status, 404)
+
+    ctx.provide('connection', { requestRejection: () => 403 as const })
+    assert.equal((await get(url)).status, 403)
   } finally {
     await carrier.dispose()
   }
