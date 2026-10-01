@@ -284,3 +284,32 @@ test('a token endpoint that never answers cannot hold the reading past the deadl
     await rm(home, { recursive: true, force: true })
   }
 })
+
+test('an omniroute connection id of . or .. is never asked', async () => {
+  // Both survive `encodeURIComponent`, and the URL parser then climbs out of
+  // `/api/usage/` into another router endpoint with the bearer attached.
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'omniroute', displayName: 'OmniRoute', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'omniroute'] }] },
+    settings: { describe: () => [{ ns: 'llm-pi-ai', value: { providers: { omniroute: { baseURL: 'http://192.168.0.100:20128/v1' } } } }] },
+    credentials: { resolve: async () => ({ value: 'or-test' }) },
+  })
+  const calls: string[] = []
+  const original = globalThis.fetch
+  globalThis.fetch = ((url: string | URL) => {
+    const target = String(url)
+    calls.push(target)
+    const body = target.endsWith('/api/providers')
+      ? { connections: [{ id: '.' }, { id: '..' }, { id: 'acbe', provider: 'deepseek' }] }
+      : { plan: 'DeepSeek', quotas: { credits_usd: { remaining: 91.43, currency: 'USD', unlimited: true } } }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
+  }) as unknown as typeof fetch
+  try {
+    await request(route, `${ROUTE}?provider=omniroute`)
+    assert.deepEqual(calls, [
+      'http://192.168.0.100:20128/api/providers',
+      'http://192.168.0.100:20128/api/usage/acbe',
+    ])
+  } finally {
+    globalThis.fetch = original
+  }
+})
