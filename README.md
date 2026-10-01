@@ -2,39 +2,9 @@
 
 One statusbar figure for the provider the current session is using: the remaining
 balance on a pure API-billing route, or the plan quota on a subscription route.
-The chip sits in the composer statusbar — the row under the composer card, flush
-right so it lands directly beneath the model selector — and reads:
-
-- **`$91.81`** — DeepSeek API balance (granted / topped-up breakdown in the tooltip)
-- **`$12.34`** — OpenRouter remaining credits (bought / used in the tooltip)
-- **`GLM 27%`** — z.ai / BigModel Coding Plan quota, fullest window (5h, weekly, and
-  MCP windows with their reset times in the tooltip)
-- **`$8.75`** — LiteLLM key budget (`/key/info`: budget, spend, remaining), which is
-  also the fallback shape tried for any other route that has a base URL
-- **`Claude 100%`**, **`Codex 32%`**, **`Grok 92%`**, **`Cursor 64%`** — the
-  subscription plans' own meters, read from the credential the CLI already left on
-  this machine: `~/.claude/.credentials.json`, `~/.codex/auth.json`,
-  `~/.grok/auth.json`, and Cursor's `~/.config/cursor/auth.json` or IDE database.
-  The tooltip lists every window (session, weekly, credits, on-demand) with its
-  reset time.
-- **`OmniRoute 100%`** — the fullest window across the upstream connections an
-  OmniRoute deployment holds, read from OmniRoute's own `GET /api/providers` and
-  `GET /api/usage/<connectionId>`. The tooltip names each connection's plan and
-  its windows (`DeepSeek · Credits $91.27 left`, `SuperGrokPro · Weekly 7% left,
-  resets …`).
-
-Metered quota figures count **down**: the chip shows what is left, not what is
-spent, and colors itself by headroom — green at ≥50% remaining, yellow at ≥25%,
-orange at ≥10%, red below.
-
-Any other provider renders nothing: the statusbar never grows a "no data" row.
-That is the case for local inference (vLLM) and for per-request API billing with
-no balance route.
-
-A reading that **failed** — a rejected key, an unreachable endpoint, a provider
-that answered with an error — is the one exception: the chip renders dimmed as
-`quota ?` with the reason in its tooltip, because silence there would hide a
-broken setup behind "nothing to show". Clicking it retries.
+The chip sits in the composer statusbar (the row under the composer card), flush
+right so it lands directly beneath the model selector, and the provider key never
+leaves the host process.
 
 ## What you get
 
@@ -55,21 +25,79 @@ broken setup behind "nothing to show". Clicking it retries.
 > **Install it as a bundle.** `dsh plugin add …` mounts the row from the
 > package's own patch layer, which is what the settings editor can write to. A
 > row added with `--patch` is an overlay: it disappears at the next start, and
-> the Plugins card cannot save into it — the editor refuses a write an overlay
-> would win.
+> the Plugins card cannot save into it (the editor refuses a write an overlay
+> would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check
-dsh plugin --profile web update dsh-quota-check   # refresh later
+dsh plugin --profile web add github:maci0/dsh-quota-check#v0.9.0
 ```
 
-For work on this checkout, `dsh plugin --profile web add link:/path/to/dsh-quota-check`
-also works: `link:` keeps the profile pointing at the working copy, so
-`npm run build` is what ships a source change — no reinstall. Then restart
-`dsh web`: `dsh plugin add` appends the package to `dsh.profile.bundles`, and
-bundles are frozen at boot, so a restart is what mounts the plugin. Do **not** also paste the
-`id: quota-check` row from `cordis.patch.yml` into the profile's own patch:
-`insert` does not dedupe ids.
+Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the same command with the newer tag, then restart `dsh web` (bundle layers compose at boot).
+
+Do **not** also paste the `id: quota-check` row from `cordis.patch.yml` into the
+profile's own patch: `insert` does not dedupe ids.
+
+## Configure
+
+Three fields, all editable from the Web client: open **Plugins**, then the
+**quota-check** row, then **Configure**. The card validates the schema's bounds
+before the write (an emptied box is refused, not saved as `0`), saves every
+changed field in one update, and marks the fields you have overridden with a
+**Reset to defaults** control. Every field is `volatile()`, so a save reaches the
+running route: the host re-reads the row per request and drops its served
+readings, which is why a new cache window or cadence applies to the next poll
+instead of waiting for a restart.
+
+The same row can be set by hand in the profile's own `cordis.patch.yml`:
+
+```yaml
+- id: quota-check
+  config:
+    cacheSeconds: 60      # seconds one reading is served; 0 re-asks every time
+    timeoutMs: 10000      # per-provider request deadline
+    refreshSeconds: 300   # browser re-read cadence; reported to the chip
+```
+
+| Field | Default | Bounds | Meaning |
+|---|---|---|---|
+| `cacheSeconds` | `60` | 0–3600 | How long one reading is served before the provider is asked again. `0` asks every time. |
+| `timeoutMs` | `10000` | 1–60000 | Per-request deadline for one provider call, including a subscription token refresh. |
+| `refreshSeconds` | `300` | 10–3600 | The cadence the host reports to the chip, which re-reads at that interval. |
+
+## The chip
+
+It reads:
+
+- **`$91.81`**: DeepSeek API balance (granted / topped-up breakdown in the tooltip)
+- **`$12.34`**: OpenRouter remaining credits (bought / used in the tooltip)
+- **`GLM 27%`**: z.ai / BigModel Coding Plan quota, fullest window (5h, weekly, and
+  MCP windows with their reset times in the tooltip)
+- **`$8.75`**: LiteLLM key budget (`/key/info`: budget, spend, remaining), which is
+  also the fallback shape tried for any other route that has a base URL
+- **`Claude 100%`**, **`Codex 32%`**, **`Grok 92%`**, **`Cursor 64%`**: the
+  subscription plans' own meters, read from the credential the CLI already left on
+  this machine: `~/.claude/.credentials.json`, `~/.codex/auth.json`,
+  `~/.grok/auth.json`, and Cursor's `~/.config/cursor/auth.json` or IDE database.
+  The tooltip lists every window (session, weekly, credits, on-demand) with its
+  reset time.
+- **`OmniRoute 100%`**: the fullest window across the upstream connections an
+  OmniRoute deployment holds, read from OmniRoute's own `GET /api/providers` and
+  `GET /api/usage/<connectionId>`. The tooltip names each connection's plan and
+  its windows (`DeepSeek · Credits $91.27 left`, `SuperGrokPro · Weekly 7% used`,
+  each with its reset time).
+
+Metered quota figures count **down**: the chip shows what is left, not what is
+spent, and colors itself by headroom: green at ≥50% remaining, yellow at ≥25%,
+orange at ≥10%, red below.
+
+Any other provider renders nothing: the statusbar never grows a "no data" row.
+That is the case for local inference (vLLM) and for per-request API billing with
+no balance route.
+
+A reading that **failed** (a rejected key, an unreachable endpoint, a provider
+that answered with an error) is the one exception: the chip renders dimmed as
+`quota ?` with the reason in its tooltip, because silence there would hide a
+broken setup behind "nothing to show". Clicking it retries.
 
 ## How it works
 
@@ -78,9 +106,11 @@ bundles are frozen at boot, so a restart is what mounts the plugin. Do **not** a
   LLM registry plus the settings document, resolves the credential through
   `ctx.credentials` (falling back to `process.env`), calls the
   provider, and returns one JSON report. The provider key never leaves this
-  process; readings are cached for a minute per provider, so a rerender, a
+  process; readings are cached for `cacheSeconds` per provider, so a rerender, a
   session switch, or a second tab never multiplies provider traffic.
-  `?refresh=1` forces a fresh read.
+  `?refresh=1` forces a fresh read. A settings write drops the cache, and a read
+  that was in flight during the write answers its caller but is neither cached
+  nor handed to later polls.
 - **Browser half** (`lib/client.js`) reads `modelSelection` from the session's
   projections, asks that route for the selected provider, and draws the returned
   text in `conversation.composer.dock`. It is pushed to the right edge of the
@@ -98,64 +128,50 @@ bundles are frozen at boot, so a restart is what mounts the plugin. Do **not** a
   that route answers 404 and renders no chip. OmniRoute is the one probe with two
   rounds: it is recognized by route id, because the host is whatever machine runs
   it, then asks `/api/providers` for the connection ids and `/api/usage/<id>` for
-  each connection that is live and publishes its quota. A chip for an OmniRoute
-  route is therefore one listing plus one request per visible connection.
+  each connection that is live and publishes its quota (an id of `.` or `..` is
+  skipped, since no usage path can address it). A chip for an OmniRoute route is
+  therefore one listing plus one request per visible connection.
 - **Local credentials** (`src/local-usage.ts`) are the port of the `quota-widget`
   fetchers: file paths, expiry skews, refresh bodies, and the atomic 0600
   write-back that keeps the CLI signed in. Only Claude, Codex, and Grok ever
   rotate a token; Cursor's session token is long-lived and rotates in the IDE.
-  Grok's token endpoint is discovered at runtime, and its two billing meters
-  (weekly credits, monthly spend) are two requests, so a probe may read more than
-  one URL and still report when only one answered.
+  Every token request is bounded by `timeoutMs`, and a refresh that fails or
+  times out falls back to the token on disk. Grok's token endpoint is discovered
+  at runtime, and its two billing meters (weekly credits, monthly spend) are two
+  requests, so a probe may read more than one URL and still report when only one
+  answered.
 
 Adding a key-based probe is one function in `src/probes.ts` plus a case in
 `tests/probes.test.ts`; adding a subscription provider is that plus a credential
 reader in `src/local-usage.ts`. A probe whose endpoint names ids the route
-configuration cannot carry — OmniRoute's per-connection usage — declares
+configuration cannot carry (OmniRoute's per-connection usage) declares
 `requests` instead of `url`, and reads its own listing before the host asks each
 id.
 
-## Configure
-
-Three fields, all editable from the Web client: open **Plugins** → the
-**quota-check** row → **Configure**. The card validates the schema's bounds
-before the write, saves every changed field in one update, and marks the fields
-you have overridden with a **Reset to defaults** control. Every field is
-`volatile()`, so a save reaches the running route: the host re-reads the row per
-request and drops its served readings, which is why a new cache window or
-cadence applies to the next poll instead of waiting for a restart.
-
-The same row can be set by hand in the profile's own `cordis.patch.yml`:
-
-```yaml
-- id: quota-check
-  config:
-    cacheSeconds: 60      # seconds one reading is served; 0 re-asks every time
-    timeoutMs: 10000      # per-provider request deadline
-    refreshSeconds: 300   # browser re-read cadence; reported to the chip
-```
-
-| Field | Default | Bounds | Meaning |
-|---|---|---|---|
-| `cacheSeconds` | `60` | 0–3600 | How long one reading is served before the provider is asked again. `0` asks every time. |
-| `timeoutMs` | `10000` | 1–60000 | Per-request deadline for one provider call. |
-| `refreshSeconds` | `300` | 10–3600 | The cadence the host reports to the chip, which re-reads at that interval. |
-
 ## Security
 
-The route is registered behind the composition's trust fence
-(`ctx.connection.requestRejection`), so it answers only same-origin,
-authenticated callers, exactly like the harness's own browser routes. Responses
-carry formatted figures only — never a key, never a raw provider body, never a
-token.
+The plugin injects the composition's trust fence (`connection`) and the route
+asks `requestRejection` before anything else, so it answers only same-origin,
+authenticated callers, exactly like the harness's own browser routes; a
+composition without that service never mounts the route. Responses carry
+formatted figures only: never a key, never a raw provider body, never a token. A
+failure thrown inside another service (credentials, settings) is logged on the
+host, and the report carries a fixed sentence instead of its text.
 
 Subscription credentials stay on this machine: they are read from the CLI's own
 files and sent only to the vendor that issued them (`api.anthropic.com`,
 `chatgpt.com`, `cli-chat-proxy.grok.com`, `cursor.com`). A rotated token is
-written back the way the CLI writes it — same file, same fields, mode 0600, one
-atomic rename — so the plugin never signs a CLI out. The Claude usage request
+written back the way the CLI writes it (same file, same fields, mode 0600, one
+atomic rename), so the plugin never signs a CLI out. The Claude usage request
 deliberately wears Claude Code's own User-Agent, because Anthropic rate-limits
 that endpoint per agent.
+
+## Limits
+
+- **OmniRoute has no per-route figure.** The router holds the upstream accounts, so a quota is only knowable per connection. The chip shows the fullest window across them and the tooltip names each plan; which account one request spends is the router's decision, so the plugin does not attribute it to a DSH route. A read is one listing plus one request per visible connection (21 on the reference box), cached for `cacheSeconds`.
+- **The subscription probes follow route identity.** A route must be named after the vendor or answer on the vendor's own host. A reseller that proxies Claude on `omniroute`'s host therefore shows nothing rather than the local Claude Code plan, and Vertex-hosted Claude (`google-vertex-anthropic`) is deliberately excluded.
+- **A rotated token is written to the CLI's own file.** The plugin refreshes Claude, Codex, and Grok credentials and writes them back atomically at mode 0600. That keeps the CLI signed in, but it means this plugin is a writer in `~/.claude`, `~/.codex`, and `~/.grok`. Cursor's session token has no refresh path at all.
+- **Cursor credential reading needs `node:sqlite`.** The IDE database fallback imports it dynamically, so a runtime without that built-in reads only `~/.config/cursor/auth.json` and reports no Cursor chip from the database alone.
 
 ## Development
 
@@ -166,9 +182,13 @@ npm test             # probes, credentials, route, and the real-composition boot
 npm run build        # tsc -> lib/*.js
 ```
 
+For local development, `dsh plugin --profile <name> add <path-to-checkout>`
+(after `npm run build`), then restart `dsh web`.
+
 `npm test` includes the real-composition case: the plugin mounts into a real
 Cordis `Context` beside the real HTTP carrier on an OS-assigned port, the route
-is driven over real HTTP, and disposing the fiber must withdraw it.
+is driven over real HTTP, disposing the fiber must withdraw it, and no route
+exists until the trust fence is mounted.
 
 Verify the route by hand once the plugin is mounted, from the same browser that
 has the Web client open (the route is behind the session cookie):
@@ -176,13 +196,6 @@ has the Web client open (the route is behind the session cookie):
 ```
 http://127.0.0.1:3080/quota-check?provider=deepseek-official
 ```
-
-## Limits
-
-- **OmniRoute has no per-route figure** — the router holds the upstream accounts, so a quota is only knowable per connection. The chip shows the fullest window across them and the tooltip names each plan; which account one request spends is the router's decision, so the plugin does not attribute it to a DSH route. A read is one listing plus one request per visible connection (21 on the reference box), cached for `cacheSeconds`.
-- **The subscription probes follow route identity** — a route must be named after the vendor or answer on the vendor's own host. A reseller that proxies Claude on `omniroute`'s host therefore shows nothing rather than the local Claude Code plan, and Vertex-hosted Claude (`google-vertex-anthropic`) is deliberately excluded.
-- **A rotated token is written to the CLI's own file** — the plugin refreshes Claude, Codex, and Grok credentials and writes them back atomically at mode 0600. That keeps the CLI signed in, but it means this plugin is a writer in `~/.claude`, `~/.codex`, and `~/.grok`. Cursor's session token has no refresh path at all.
-- **Cursor credential reading needs `node:sqlite`** — the IDE database fallback imports it dynamically, so a runtime without that built-in reads only `~/.config/cursor/auth.json` and reports no Cursor chip from the database alone.
 
 ## Licence
 
