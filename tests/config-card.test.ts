@@ -12,6 +12,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
+import { REGISTRATION } from './client-bundle.ts'
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- a hand-built element tree has no React types. */
 type Element = { type: any; props: Record<string, any> & { children?: any } }
@@ -41,27 +42,6 @@ function createReact(): { hooks: { cells: any[]; index: number }; createElement:
     useSyncExternalStore(_subscribe: any, getSnapshot: any): any { return getSnapshot() },
   }
 }
-
-/**
- * Import `lib/client.js` once and capture the registration it hands
- * `window.__ModuleLoader__`, exactly as the module system receives it in the
- * page. Each case then calls the captured factory, which builds fresh state.
- */
-async function importRegistration(): Promise<any> {
-  let registration: any
-  const scope = globalThis as { window?: unknown }
-  const previous = scope.window
-  scope.window = { __ModuleLoader__: { load: (spec: any) => { registration = spec } } }
-  try {
-    await import(new URL('../lib/client.js', import.meta.url).href)
-  } finally {
-    scope.window = previous
-  }
-  assert.ok(registration, 'lib/client.js registered itself on window.__ModuleLoader__')
-  return registration
-}
-
-const REGISTRATION = await importRegistration()
 
 /** Run the captured factory and return its exports. */
 function loadClient(): { registration: any; exports: any; React: ReturnType<typeof createReact> } {
@@ -320,7 +300,6 @@ test('an emptied field is refused, not written as zero', async () => {
   assert.match(textOf(client.render({ view: 'page' })), /numberInvalid/)
   assert.deepEqual(client.mutations, [])
 })
-
 
 test('a write in flight disables save and reset, so a double click writes once', async () => {
   const client = createClient({ user: { cacheSeconds: 120 } })
