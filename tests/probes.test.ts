@@ -72,6 +72,12 @@ test('an aggregator route falls back to the LiteLLM key-budget endpoint', () => 
   assert.equal(resolveProbe('litellm', 'https://llm.example.com/v1')?.url, 'https://llm.example.com/key/info')
 })
 
+test('a known configured host wins over a LiteLLM-looking route id', () => {
+  assert.equal(resolveProbe('litellm-deepseek', 'https://api.deepseek.com/v1')?.url, 'https://api.deepseek.com/user/balance')
+  assert.equal(resolveProbe('litellm-openrouter', 'https://openrouter.ai/api/v1')?.url, 'https://openrouter.ai/api/v1/credits')
+  assert.equal(resolveProbe('litellm-claude', 'https://api.anthropic.com/v1')?.local, 'claude')
+})
+
 test('an omniroute route reads OmniRoute own per-connection usage', () => {
   const probe = resolveProbe('omniroute', 'http://192.168.0.100:20128/v1')
   assert.equal(probe?.kind, 'quota')

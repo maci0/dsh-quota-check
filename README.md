@@ -29,7 +29,7 @@ leaves the host process.
 > would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check#v0.12.0
+dsh plugin --profile web add github:maci0/dsh-quota-check#v0.12.1
 ```
 
 Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the same command with the newer tag, then restart `dsh web` (bundle layers compose at boot).
@@ -178,7 +178,7 @@ that endpoint per agent.
 
 - **OmniRoute has no per-route figure.** The router holds the upstream accounts, so a quota is only knowable per connection. The chip shows the fullest window across them and the tooltip names each plan; which account one request spends is the router's decision, so the plugin does not attribute it to a DSH route. A read is one listing plus one request per visible connection (21 on the reference box), cached for `cacheSeconds`.
 - **The subscription probes follow route identity.** A route must be named after the vendor or answer on the vendor's own host. A reseller that proxies Claude on `omniroute`'s host therefore shows nothing rather than the local Claude Code plan, and Vertex-hosted Claude (`google-vertex-anthropic`) is deliberately excluded.
-- **A rotated token is written to the CLI's own file.** The plugin refreshes Claude, Codex, and Grok credentials and writes them back atomically at mode 0600. That keeps the CLI signed in, but it means this plugin is a writer in `~/.claude`, `~/.codex`, and `~/.grok`. Cursor's session token has no refresh path at all.
+- **A rotated token is written to the CLI's own file.** The plugin refreshes Claude, Codex, and Grok credentials and writes them back atomically at mode 0600. That keeps the CLI signed in, but it means this plugin is a writer in `~/.claude`, `~/.codex`, and `~/.grok`. Cursor's session token has no refresh path at all. Reads sharing a CLI credential are serialized within this process. Refresh write-back preserves edits made while the token request runs and skips a newer or removed login; separate CLI processes do not share a locking protocol.
 - **Cursor credential reading needs `node:sqlite`.** The IDE database fallback imports it dynamically, so a runtime without that built-in reads only `~/.config/cursor/auth.json` and reports no Cursor chip from the database alone.
 
 ## Development

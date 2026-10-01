@@ -21,7 +21,7 @@
 
 import { chmod, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { isoToMs, numberOf, record, stringOf } from './util.ts'
 
 /** The subscription providers whose credentials live on this machine. */
@@ -100,6 +100,17 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   }
 }
 
+/** Preserve edits made while refreshing, and never replace a newer login or resurrect a removed one. */
+async function saveRotation(
+  path: string, field: string, expected: Record<string, unknown>,
+  patch: Record<string, unknown>, topPatch: Record<string, unknown> = {},
+): Promise<void> {
+  const latest = record(await readJson(path))
+  const current = record(latest?.[field])
+  if (current === undefined || !Object.entries(expected).every(([key, value]) => current[key] === value)) return
+  await writeJson(path, { ...latest, ...topPatch, [field]: { ...current, ...patch } })
+}
+
 /** Decoded JWT payload, or `undefined` for an opaque or malformed token. */
 function jwtPayload(token: string): Record<string, unknown> | undefined {
   const part = token.split('.')[1]
@@ -157,8 +168,8 @@ function formBody(fields: Readonly<Record<string, string>>): string {
  */
 async function claudeRequests(home: string, force: boolean, timeoutMs: number): Promise<readonly LocalRequest[]> {
   const path = join(home, ...CLAUDE_CREDENTIALS)
-  let credentials = await readJson(path)
-  let oauth = record(record(credentials)?.['claudeAiOauth'])
+  const credentials = await readJson(path)
+  const oauth = record(record(credentials)?.['claudeAiOauth'])
   if (oauth === undefined) return []
   let token = stringOf(oauth['accessToken'])
   if (token === undefined) return []
@@ -186,14 +197,13 @@ async function claudeRequests(home: string, force: boolean, timeoutMs: number): 
         if (rotated.status === 400 || rotated.status === 401) break
         const access = stringOf(rotated.body?.['access_token'])
         if (access === undefined) continue
-        const next: Record<string, unknown> = { ...oauth, accessToken: access }
+        const next: Record<string, unknown> = { accessToken: access }
         const rotatedRefresh = stringOf(rotated.body?.['refresh_token'])
         if (rotatedRefresh !== undefined) next['refreshToken'] = rotatedRefresh
         const expiresIn = numberOf(rotated.body?.['expires_in'])
         if (expiresIn !== undefined) next['expiresAt'] = Date.now() + expiresIn * 1_000
-        const updated = { ...record(credentials), claudeAiOauth: next }
-        await writeJson(path, updated).catch(() => { /* serve the live token anyway */ })
-        oauth = next
+        await saveRotation(path, 'claudeAiOauth', { accessToken: token, refreshToken }, next)
+          .catch(() => { /* serve the live token anyway */ })
         token = access
         break
       }
@@ -221,12 +231,12 @@ async function claudeRequests(home: string, force: boolean, timeoutMs: number): 
  */
 async function codexRequests(home: string, force: boolean, timeoutMs: number): Promise<readonly LocalRequest[]> {
   const path = join(home, ...CODEX_AUTH)
-  let auth = record(await readJson(path))
+  const auth = record(await readJson(path))
   if (auth === undefined) return []
-  let tokens = record(auth['tokens'])
+  const tokens = record(auth['tokens'])
   let access = stringOf(tokens?.['access_token'])
   if (access === undefined) return []
-  let account = stringOf(tokens?.['account_id'])
+  const account = stringOf(tokens?.['account_id'])
     ?? stringOf(jwtClaim(access, 'https://api.openai.com/auth', 'chatgpt_account_id'))
 
   const expiresMs = jwtExpiryMs(access)
@@ -244,17 +254,14 @@ async function codexRequests(home: string, force: boolean, timeoutMs: number): P
     }), timeoutMs)
     const rotatedAccess = stringOf(rotated.body?.['access_token'])
     if (rotatedAccess !== undefined) {
-      const nextTokens: Record<string, unknown> = { ...tokens, access_token: rotatedAccess }
+      const nextTokens: Record<string, unknown> = { access_token: rotatedAccess }
       const rotatedRefresh = stringOf(rotated.body?.['refresh_token'])
       if (rotatedRefresh !== undefined) nextTokens['refresh_token'] = rotatedRefresh
       const rotatedId = stringOf(rotated.body?.['id_token'])
       if (rotatedId !== undefined) nextTokens['id_token'] = rotatedId
-      const updated = { ...auth, tokens: nextTokens, last_refresh: new Date().toISOString() }
-      await writeJson(path, updated).catch(() => { /* serve the live token anyway */ })
-      auth = updated
-      tokens = nextTokens
+      await saveRotation(path, 'tokens', { access_token: access, refresh_token: refreshToken }, nextTokens,
+        { last_refresh: new Date().toISOString() }).catch(() => { /* serve the live token anyway */ })
       access = rotatedAccess
-      account = stringOf(nextTokens['account_id']) ?? account
     }
   }
   const headers: Record<string, string> = {
@@ -269,11 +276,11 @@ async function codexRequests(home: string, force: boolean, timeoutMs: number): P
 /** Grok's newest OIDC entry, with the key it is stored under. */
 function newestGrokEntry(store: Record<string, unknown>): { key: string; entry: Record<string, unknown> } | undefined {
   let best: { key: string; entry: Record<string, unknown> } | undefined
-  let bestExpiry = ''
+  let bestExpiry = -Infinity
   for (const [key, value] of Object.entries(store)) {
     const entry = record(value)
-    if (entry === undefined || entry['key'] === undefined) continue
-    const expiry = typeof entry['expires_at'] === 'string' ? entry['expires_at'] : ''
+    if (entry === undefined || stringOf(entry['key']) === undefined) continue
+    const expiry = isoToMs(entry['expires_at']) ?? -Infinity
     if (best === undefined || expiry > bestExpiry) {
       best = { key, entry }
       bestExpiry = expiry
@@ -295,7 +302,7 @@ async function grokRequests(home: string, force: boolean, timeoutMs: number): Pr
   if (store === undefined) return []
   const found = newestGrokEntry(store)
   if (found === undefined) return []
-  let { entry } = found
+  const { entry } = found
   let token = stringOf(entry['key'])
   if (token === undefined) return []
 
@@ -328,19 +335,15 @@ async function grokRequests(home: string, force: boolean, timeoutMs: number): Pr
     }
     const rotatedAccess = stringOf(rotated.body?.['access_token'])
     if (rotatedAccess !== undefined) {
-      const next: Record<string, unknown> = { ...entry, key: rotatedAccess }
+      const next: Record<string, unknown> = { key: rotatedAccess }
       const rotatedRefresh = stringOf(rotated.body?.['refresh_token'])
       if (rotatedRefresh !== undefined) next['refresh_token'] = rotatedRefresh
       const expiresIn = numberOf(rotated.body?.['expires_in'])
       if (expiresIn !== undefined) {
         next['expires_at'] = new Date(Date.now() + expiresIn * 1_000).toISOString()
       }
-      // Grok re-reads its own file before writing: another process may have
-      // rotated a different account entry while this one was in flight.
-      const latest = record(await readJson(path)) ?? {}
-      latest[found.key] = next
-      await writeJson(path, latest).catch(() => { /* serve the live token anyway */ })
-      entry = next
+      await saveRotation(path, found.key, { key: token, refresh_token: refreshToken }, next)
+        .catch(() => { /* serve the live token anyway */ })
       token = rotatedAccess
     }
   }
@@ -442,6 +445,9 @@ async function cursorRequests(home: string): Promise<readonly LocalRequest[]> {
   }]
 }
 
+// ponytail: serializes this process's reads; CLI processes do not share a locking protocol.
+const localReads = new Map<string, Promise<readonly LocalRequest[]>>()
+
 /**
  * Build the outbound requests for one subscription provider.
  * @param provider - which CLI credential to read.
@@ -456,10 +462,19 @@ export async function localRequests(
   // the value at startup, so a later change (a test's scratch home) is missed.
   const home = options.home ?? (process.env['HOME'] || homedir())
   const force = options.forceRefresh === true
-  switch (provider) {
-    case 'claude': return await claudeRequests(home, force, options.timeoutMs)
-    case 'codex': return await codexRequests(home, force, options.timeoutMs)
-    case 'grok': return await grokRequests(home, force, options.timeoutMs)
-    case 'cursor': return await cursorRequests(home)
+  const key = JSON.stringify([resolve(home), provider])
+  const pending = (localReads.get(key) ?? Promise.resolve([])).catch(() => []).then(async () => {
+    switch (provider) {
+      case 'claude': return await claudeRequests(home, force, options.timeoutMs)
+      case 'codex': return await codexRequests(home, force, options.timeoutMs)
+      case 'grok': return await grokRequests(home, force, options.timeoutMs)
+      case 'cursor': return await cursorRequests(home)
+    }
+  })
+  localReads.set(key, pending)
+  try {
+    return await pending
+  } finally {
+    if (localReads.get(key) === pending) localReads.delete(key)
   }
 }

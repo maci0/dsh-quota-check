@@ -114,6 +114,79 @@ test('an expired Claude token rotates in place and keeps every other field', asy
   }
 })
 
+test('concurrent aliases share a credential refresh without losing edits made during it', async () => {
+  const { home, dispose } = await temporaryHome()
+  const path = join(home, '.claude', '.credentials.json')
+  const original = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => {
+    calls += 1
+    const latest = JSON.parse(await readFile(path, 'utf8'))
+    latest.subscriptionType = 'new-plan'
+    latest.claudeAiOauth.scopes = ['new-scope']
+    await writeCredential(path, latest)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    return Response.json({ access_token: 'rotated', refresh_token: 'r2', expires_in: 3_600 })
+  }) as typeof fetch
+  try {
+    await writeCredential(path, {
+      claudeAiOauth: { accessToken: 'stale', refreshToken: 'r', expiresAt: Date.now() - 1_000 },
+      subscriptionType: 'old-plan',
+    })
+    const results = await Promise.all([1, 2].map(() => localRequests('claude', { home, timeoutMs: TIMEOUT_MS })))
+    assert.equal(calls, 1, 'one expired token must not be refreshed twice concurrently')
+    assert.ok(results.every(requests => requests[0]?.headers['authorization'] === 'Bearer rotated'))
+    const stored = JSON.parse(await readFile(path, 'utf8'))
+    assert.equal(stored.subscriptionType, 'new-plan')
+    assert.deepEqual(stored.claudeAiOauth.scopes, ['new-scope'])
+  } finally {
+    globalThis.fetch = original
+    await dispose()
+  }
+})
+
+test('rotation preserves current fields and does not overwrite a new or removed CLI login', async () => {
+  const entries = [
+    { provider: 'claude', file: ['.claude', '.credentials.json'], field: 'claudeAiOauth', access: 'accessToken',
+      value: { accessToken: 'stale', refreshToken: 'r', expiresAt: 1 } },
+    { provider: 'codex', file: ['.codex', 'auth.json'], field: 'tokens', access: 'access_token',
+      value: { access_token: jwt({ exp: 1 }), refresh_token: 'r' } },
+    { provider: 'grok', file: ['.grok', 'auth.json'], field: 'user::client', access: 'key',
+      value: { key: 'stale', refresh_token: 'r', expires_at: '2000-01-01T00:00:00Z' } },
+  ] as const
+  for (const entry of entries) for (const change of ['edit', 'login', 'remove'] as const) {
+    const { home, dispose } = await temporaryHome()
+    const path = join(home, ...entry.file)
+    const original = globalThis.fetch
+    globalThis.fetch = (async (url) => {
+      if (String(url).includes('openid-configuration')) return Response.json({ token_endpoint: 'https://auth.x.ai/token' })
+      if (change === 'remove') await rm(path)
+      else {
+        const current = JSON.parse(await readFile(path, 'utf8'))
+        current.extra = 'changed'
+        current[entry.field].scopes = ['new-scope']
+        if (change === 'login') current[entry.field][entry.access] = 'new-login'
+        await writeCredential(path, current)
+      }
+      return Response.json({ access_token: 'rotated', refresh_token: 'r2', expires_in: 3600 })
+    }) as typeof fetch
+    try {
+      await writeCredential(path, { [entry.field]: entry.value, extra: 'old' })
+      await localRequests(entry.provider, { home, timeoutMs: TIMEOUT_MS })
+      if (change === 'remove') await assert.rejects(readFile(path), { code: 'ENOENT' })
+      else {
+        const stored = JSON.parse(await readFile(path, 'utf8'))
+        assert.equal(stored.extra, 'changed', entry.provider)
+        assert.deepEqual(stored[entry.field].scopes, ['new-scope'], entry.provider)
+        assert.equal(stored[entry.field][entry.access], change === 'login' ? 'new-login' : 'rotated', entry.provider)
+      }
+    } finally {
+      globalThis.fetch = original
+      await dispose()
+    }
+  }
+})
+
 test('an expired Codex token rotates, and the account id rides every request', async () => {
   const { home, dispose } = await temporaryHome()
   const path = join(home, '.codex', 'auth.json')
@@ -168,6 +241,19 @@ test('Grok reads the newest account entry and asks both billing meters', async (
   } finally {
     await dispose()
   }
+})
+
+test('Grok compares expiry instants and skips entries without usable tokens', async () => {
+  const { home, dispose } = await temporaryHome()
+  try {
+    await writeCredential(join(home, '.grok', 'auth.json'), {
+      'earlier::client': { key: 'earlier', expires_at: '2030-01-01T10:00:00+10:00' },
+      'later::client': { key: 'later', expires_at: '2030-01-01T01:00:00Z' },
+      'broken::client': { key: {}, expires_at: '2031-01-01T00:00:00Z' },
+    })
+    const requests = await localRequests('grok', { home, timeoutMs: TIMEOUT_MS })
+    assert.equal(requests[0]?.headers['authorization'], 'Bearer later')
+  } finally { await dispose() }
 })
 
 test('an expired Grok token is refreshed through the discovered OIDC endpoint', async () => {
