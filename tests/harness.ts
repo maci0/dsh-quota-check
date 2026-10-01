@@ -16,7 +16,8 @@ export interface Captured {
   body: unknown
 }
 
-/** Services a case may mount; absent keys read as "not mounted". */
+/** Optional services a case may mount; absent keys read as "not mounted". The
+ * fence is injected, so an absent `connection` admits every request. */
 export interface Services {
   llm?: unknown
   settings?: { describe(): readonly SettingsDescriptorLike[] }
@@ -32,7 +33,6 @@ export function mount(
   const routes: WebRouteLike[] = []
   const volatileListeners: (() => void)[] = []
   const ctx = {
-    inject: (): void => {},
     effect: (callback: () => Disposable | void): void => { callback() },
     on: (event: string, listener: () => void): (() => void) => {
       if (event === 'loader/volatile-update') volatileListeners.push(listener)
@@ -40,6 +40,7 @@ export function mount(
     },
     get: (name: string): unknown => (services as Record<string, unknown>)[name],
     logger: { warn: (): void => {}, error: (): void => {} },
+    connection: services.connection ?? { requestRejection: (): undefined => undefined },
     webServer: {
       register: (route: WebRouteLike): Disposable => {
         routes.push(route)

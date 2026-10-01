@@ -25,7 +25,11 @@ import Schema from '@deepseek-ai/schemastery';
 import type { HostContext } from './host.ts';
 /** Plugin name as it appears in the loader. */
 export declare const name = "quota-check";
-/** The route carrier is the one service this plugin cannot work without. */
+/**
+ * The route carrier, and the trust fence the route checks first: without
+ * `connection` nothing would refuse a cross-origin or unauthenticated caller,
+ * so the plugin waits for it rather than serving unfenced.
+ */
 export declare const inject: string[];
 /** The route the browser half reads. */
 export declare const ROUTE = "/quota-check";

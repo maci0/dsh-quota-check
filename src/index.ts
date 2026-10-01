@@ -28,7 +28,6 @@ import { resolveProbe } from './probes.ts'
 import { record } from './util.ts'
 import type {
   ConfigurableProviderLike,
-  ConnectionLike,
   CredentialsLike,
   Disposable,
   HostContext,
@@ -41,8 +40,12 @@ import type {
 /** Plugin name as it appears in the loader. */
 export const name = 'quota-check'
 
-/** The route carrier is the one service this plugin cannot work without. */
-export const inject = ['webServer']
+/**
+ * The route carrier, and the trust fence the route checks first: without
+ * `connection` nothing would refuse a cross-origin or unauthenticated caller,
+ * so the plugin waits for it rather than serving unfenced.
+ */
+export const inject = ['webServer', 'connection']
 
 /** The route the browser half reads. */
 export const ROUTE = '/quota-check'
@@ -196,11 +199,6 @@ function searchParamsOf(url: string): URLSearchParams {
   const start = target.indexOf('?')
   if (start < 0) return new URLSearchParams()
   return new URLSearchParams(target.slice(start + 1))
-}
-
-/** The composition's trust fence, when this composition mounts one. */
-function connectionOf(ctx: HostContext): ConnectionLike | undefined {
-  return ctx.get('connection') as ConnectionLike | undefined
 }
 
 /**
@@ -462,7 +460,7 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
   }
 
   const handler = async (req: RequestLike, res: ResponseLike): Promise<void> => {
-    const rejection = connectionOf(ctx)?.requestRejection(req)
+    const rejection = ctx.connection.requestRejection(req)
     if (rejection !== undefined) {
       res.statusCode = rejection
       res.end()
