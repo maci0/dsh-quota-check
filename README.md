@@ -120,6 +120,8 @@ broken setup behind "nothing to show". Clicking it retries.
   dock and then pulled back by the composer card's own inset plus the send
   control, so the figure sits under the model selector at any viewport width. A
   click re-reads; otherwise the chip refreshes on the host's configured cadence.
+  After a provider switch the chip draws nothing until the new provider's
+  reading lands, so the previous figure never reads as the new one.
 - **Probes** (`src/probes.ts`) are the pure rules: which endpoint answers for a
   route, and how its payload becomes the chip text and tooltip lines. A route's
   configured base URL decides when it names a known host; the provider id only

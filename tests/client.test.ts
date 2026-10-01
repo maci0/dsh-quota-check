@@ -243,3 +243,38 @@ test('a fallback to the last used provider still draws a figure', async () => {
     stub.restore()
   }
 })
+
+test('after a provider switch the previous figure is not shown as the new one', async () => {
+  const registration = mount()
+  const original = globalThis.fetch
+  const urls: string[] = []
+  globalThis.fetch = ((url: string | URL) => {
+    urls.push(String(url))
+    const deepseek = String(url).endsWith('deepseek-official')
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(deepseek
+        ? { provider: 'deepseek-official', displayName: 'DeepSeek', status: 'ok', text: '¥110.00', lines: [] }
+        : { provider: 'openrouter', displayName: 'OpenRouter', status: 'ok', text: '$12.34', lines: [] }),
+    })
+  }) as typeof globalThis.fetch
+  const selecting = (provider: string) => ({
+    useProjection: (key: string) => (key === 'modelSelection' ? { next: { provider }, lastUsed: null } : undefined),
+  })
+  try {
+    const first = await settle(registration, selecting('deepseek-official'))
+    assert.deepEqual(first?.children, ['¥110.00'])
+
+    // The session switches provider: the render before its reading lands must
+    // not present DeepSeek's balance as OpenRouter's.
+    registration.runtime.beginRender()
+    assert.equal(registration.component(selecting('openrouter')), null)
+
+    const next = await settle(registration, selecting('openrouter'))
+    assert.deepEqual(next?.children, ['$12.34'])
+    assert.deepEqual(urls, ['/quota-check?provider=deepseek-official', '/quota-check?provider=openrouter'])
+  } finally {
+    globalThis.fetch = original
+  }
+})
