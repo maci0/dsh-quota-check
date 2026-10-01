@@ -312,6 +312,7 @@ test('a write in flight disables save and reset, so a double click writes once',
   tree = client.render({ view: 'page' })
   assert.equal(button(tree, 'save')?.props.disabled, true)
   assert.equal(button(tree, 'reset')?.props.disabled, true)
+  assert.ok(findAll(tree, 'input').every(input => input.props.disabled))
   // A second click that still reaches the handler is ignored too.
   button(tree, 'save')?.props.onClick()
   button(tree, 'reset')?.props.onClick()
