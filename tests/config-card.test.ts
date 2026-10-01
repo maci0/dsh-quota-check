@@ -298,6 +298,29 @@ test('an overridden row offers a reset that clears exactly the user layer', asyn
   assert.deepEqual(client.mutations, [[{ op: 'unset', path: ['timeoutMs'] }]])
 })
 
+test('a reset the Host refuses is reported as refused', async () => {
+  const client = createClient({ acceptWrites: false, user: { cacheSeconds: 120 } })
+  client.apply()
+  const tree = client.render({ view: 'page' })
+
+  findAll(tree, 'button').find((button) => textOf(button) === 'reset')?.props.onClick()
+  await client.flush()
+  assert.match(textOf(client.render({ view: 'page' })), /rejected/)
+  assert.equal(client.mutations.length, 1)
+})
+
+test('an emptied field is refused, not written as zero', async () => {
+  const client = createClient()
+  client.apply()
+
+  // `Number('')` is 0, which passes the min of the cache window field.
+  const tree = setField(client, 'labelCacheSeconds', '')
+  findAll(tree, 'button').find((button) => textOf(button) === 'save')?.props.onClick()
+  await client.flush()
+  assert.match(textOf(client.render({ view: 'page' })), /numberInvalid/)
+  assert.deepEqual(client.mutations, [])
+})
+
 test('the card version stays in lockstep with package.json', () => {
   assert.match(SOURCE, new RegExp(`const VERSION = '${PACKAGE.version.replace(/\./gu, '\\.')}'`))
 })
