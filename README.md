@@ -29,7 +29,7 @@ leaves the host process.
 > would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check#v0.9.0
+dsh plugin --profile web add github:maci0/dsh-quota-check#v0.10.0
 ```
 
 Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the same command with the newer tag, then restart `dsh web` (bundle layers compose at boot).
