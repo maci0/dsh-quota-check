@@ -33,11 +33,13 @@ export interface LocalOptions {
     readonly home?: string;
     /** Refresh even when the token looks unexpired; the 401 retry path uses this. */
     readonly forceRefresh?: boolean;
+    /** Deadline for each token-endpoint request, in milliseconds. */
+    readonly timeoutMs: number;
 }
 /**
  * Build the outbound requests for one subscription provider.
  * @param provider - which CLI credential to read.
- * @param options - home directory and forced-refresh flag.
+ * @param options - home directory, forced-refresh flag, and token-request deadline.
  * @returns one or two requests, or `[]` when nothing usable is on disk.
  */
-export declare function localRequests(provider: LocalProvider, options?: LocalOptions): Promise<readonly LocalRequest[]>;
+export declare function localRequests(provider: LocalProvider, options: LocalOptions): Promise<readonly LocalRequest[]>;

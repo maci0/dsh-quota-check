@@ -315,7 +315,7 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
         }
       }
     } else {
-      requests = await localRequests(local, {})
+      requests = await localRequests(local, { timeoutMs })
       if (requests.length === 0) {
         return {
           ...base,
@@ -330,7 +330,7 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
     // what the CLI's own fetcher does. Cursor has no refresh path, so a retry
     // there would only repeat the same refused request.
     if (local !== undefined && local !== 'cursor' && !outcome.ok && outcome.refused) {
-      const retried = await localRequests(local, { forceRefresh: true })
+      const retried = await localRequests(local, { forceRefresh: true, timeoutMs })
       if (retried.length > 0) outcome = await fetchAll(retried, timeoutMs)
     }
     if (!outcome.ok) {

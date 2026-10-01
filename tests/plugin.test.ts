@@ -7,6 +7,9 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ROUTE } from '../src/index.ts'
 import { mount, request, stubFetch, type Services } from './harness.ts'
 
@@ -233,5 +236,51 @@ test('an untrusted caller is fenced off before any lookup', async () => {
     assert.equal(stub.calls.length, 0)
   } finally {
     stub.restore()
+  }
+})
+
+test('a token endpoint that never answers cannot hold the reading past the deadline', async () => {
+  // The Codex token is expired, so the reading first rotates it. The token
+  // host hangs; the reading must give up on it at the configured deadline and
+  // read with the token it has, instead of holding the route open forever.
+  const home = await mkdtemp(join(tmpdir(), 'quota-check-test-'))
+  const savedHome = process.env['HOME']
+  const original = globalThis.fetch
+  const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const expired = `${encode({ alg: 'RS256' })}.${encode({ exp: Math.floor(Date.now() / 1_000) - 60 })}.signature`
+  try {
+    await mkdir(join(home, '.codex'), { recursive: true })
+    await writeFile(join(home, '.codex', 'auth.json'), JSON.stringify({
+      tokens: { access_token: expired, refresh_token: 'refresh', account_id: 'acct' },
+    }))
+    process.env['HOME'] = home
+    globalThis.fetch = ((url: string | URL, init?: { signal?: AbortSignal }) => {
+      if (String(url) === 'https://auth.openai.com/oauth/token') {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => { reject(init.signal?.reason) })
+        })
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        plan_type: 'plus',
+        rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18_000 } },
+      }), { status: 200 }))
+    }) as typeof globalThis.fetch
+    const { route } = mount({}, { timeoutMs: 50 })
+    let guard: NodeJS.Timeout | undefined
+    const hung = new Promise<never>((_resolve, reject) => {
+      guard = setTimeout(() => { reject(new Error('the route hung on the token endpoint')) }, 2_000)
+    })
+    try {
+      const reply = await Promise.race([request(route, `${ROUTE}?provider=codex`), hung])
+      assert.equal((reply.body as { status: string }).status, 'ok')
+      assert.equal((reply.body as { text: string }).text, 'Codex 90%')
+    } finally {
+      clearTimeout(guard)
+    }
+  } finally {
+    globalThis.fetch = original
+    if (savedHome === undefined) delete process.env['HOME']
+    else process.env['HOME'] = savedHome
+    await rm(home, { recursive: true, force: true })
   }
 })
