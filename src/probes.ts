@@ -806,6 +806,32 @@ function cursorProbe(): Probe {
   return { kind: 'quota', local: 'cursor', parse: payloads => parseCursorSummary(payloads[0]) }
 }
 
+/** OpenCode Go subscription usage, authenticated with the route's API key. */
+function opencodeGoProbe(): Probe {
+  return {
+    kind: 'quota',
+    url: 'https://opencode.ai/zen/go/v1/usage',
+    envNames: ['OPENCODE_GO_API_KEY', 'OPENCODE_API_KEY'],
+    parse: payloads => {
+      const usage = record(record(payloads[0])?.['usage'])
+      const windows: { percent: number; line: string }[] = []
+      for (const [key, label] of [['rolling', 'Session (5h)'], ['weekly', 'Weekly'], ['monthly', 'Monthly']] as const) {
+        const meter = record(usage?.[key])
+        const percent = percentOf(meter?.['percent'])
+        if (percent === undefined) continue
+        windows.push({ percent, line: windowLine(label, percent, isoToMs(meter?.['resetsAt'])) })
+      }
+      const headline = fullest(windows)
+      if (headline === undefined) return null
+      return {
+        text: `Go ${remainingOf(headline)}%`,
+        remaining: remainingOf(headline),
+        lines: ['OpenCode Go', ...windows.map(window => window.line)],
+      }
+    },
+  }
+}
+
 /**
  * Whether a route id names a vendor whose own endpoint this plugin knows, so a
  * route that matches no host must not be handed to the aggregator fallback.
@@ -817,6 +843,7 @@ function namesVendor(id: string): boolean {
     || id.includes('zai') || id.includes('zhipu') || id.includes('bigmodel') || id.includes('glm')
     || id.includes('claude') || id.includes('anthropic') || id.includes('codex')
     || id.includes('chatgpt') || id.includes('grok') || id.includes('xai') || id.includes('cursor')
+    || id.includes('opencode')
 }
 
 /**
@@ -844,6 +871,10 @@ export function resolveProbe(providerId: string, baseURL?: string): Probe | unde
   const id = providerId.toLowerCase()
   const host = hostOf(baseURL)
   const unset = host === ''
+  if (host === 'opencode.ai') {
+    return /^\/zen\/go(?:\/|$)/.test(new URL(baseURL!).pathname) ? opencodeGoProbe() : undefined
+  }
+  if (unset && id.includes('opencode-go')) return opencodeGoProbe()
   if (hostIs(host, 'api.anthropic.com') || (unset && (id.includes('claude') || id.includes('anthropic')))) {
     return claudeProbe()
   }

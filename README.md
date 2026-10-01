@@ -29,7 +29,7 @@ leaves the host process.
 > would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check#v0.12.2
+dsh plugin --profile web add github:maci0/dsh-quota-check#v0.13.0
 ```
 
 Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the same command with the newer tag, then restart `dsh web` (bundle layers compose at boot).
@@ -74,6 +74,12 @@ It reads:
   MCP windows with their reset times in the tooltip)
 - **`$8.75`**: LiteLLM key budget (`/key/info`: budget, spend, remaining), which is
   also the fallback shape tried for any other route that has a base URL
+- **`Go 32%`**: OpenCode Go subscription quota, lowest remaining window. The
+  tooltip lists the rolling 5-hour, weekly, and monthly usage with reset times.
+  Uses the route's configured API key (or `OPENCODE_GO_API_KEY` /
+  `OPENCODE_API_KEY`) to read `https://opencode.ai/zen/go/v1/usage`.
+  Recognized by an `opencode-go` route id with no base URL, or a base URL at
+  `https://opencode.ai/zen/go/…`; Zen pay-as-you-go routes are separate.
 - **`Claude 100%`**, **`Codex 32%`**, **`Grok 92%`**, **`Cursor 64%`**: the
   subscription plans' own meters, read from the credential the CLI already left on
   this machine: `~/.claude/.credentials.json`, `~/.codex/auth.json`,

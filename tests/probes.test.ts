@@ -63,7 +63,42 @@ test('openrouter resolves to its credits endpoint', () => {
 test('a route with no base URL and no known vendor resolves nothing', () => {
   assert.equal(resolveProbe('vllm-local'), undefined)
   assert.equal(resolveProbe('meta'), undefined)
-  assert.equal(resolveProbe('opencode-go'), undefined)
+  assert.equal(resolveProbe('opencode-zen'), undefined)
+})
+
+test('OpenCode Go resolves by id or Go endpoint, keeping Zen and proxies separate', () => {
+  const probe = resolveProbe('opencode-go')
+  assert.equal(probe?.kind, 'quota')
+  assert.equal(probe?.url, 'https://opencode.ai/zen/go/v1/usage')
+  assert.deepEqual(probe?.envNames, ['OPENCODE_GO_API_KEY', 'OPENCODE_API_KEY'])
+  assert.equal(resolveProbe('minimax', 'https://opencode.ai/zen/go/v1')?.url, probe?.url)
+  assert.equal(resolveProbe('opencode-go', 'https://opencode.ai/zen/v1'), undefined)
+  assert.equal(resolveProbe('opencode-go', 'https://proxy.example.com/zen/go/v1'), undefined)
+  assert.equal(resolveProbe('opencode-go', 'https://evilopencode.ai/zen/go/v1'), undefined)
+  assert.equal(resolveProbe('opencode-go', 'https://opencode.ai/zen/gopher/v1'), undefined)
+})
+
+test('OpenCode Go counts down the fullest window and includes reset times', () => {
+  const probe = resolveProbe('opencode-go')
+  const reset = '2026-10-01T12:00:00.000Z'
+  assert.deepEqual(probe?.parse([{ usage: {
+    rolling: { status: 'ok', percent: 12.4, resetsAt: reset },
+    weekly: { status: 'ok', percent: 68, resetsAt: reset },
+    monthly: { status: 'ok', percent: 35, resetsAt: reset },
+  } }]), {
+    text: 'Go 32%', remaining: 32,
+    lines: ['OpenCode Go',
+      `Session (5h) 12% used, resets ${new Date(reset).toLocaleString()}`,
+      `Weekly 68% used, resets ${new Date(reset).toLocaleString()}`,
+      `Monthly 35% used, resets ${new Date(reset).toLocaleString()}`,
+    ],
+  })
+  assert.equal(probe?.parse([{ usage: { rolling: { percent: 0 } } }])?.text, 'Go 100%')
+  assert.equal(probe?.parse([{ usage: { rolling: { percent: 120, resetsAt: 'invalid' } } }])?.text, 'Go 0%')
+  assert.equal(probe?.parse([{ usage: { weekly: { percent: -10 } } }])?.remaining, 100)
+  assert.equal(probe?.parse([{ usage: { rolling: { percent: 'invalid' } } }]), null)
+  assert.equal(probe?.parse([{ error: { type: 'EntitlementError' } }]), null)
+  assert.equal(probe?.parse([undefined]), null)
 })
 
 test('an aggregator route falls back to the LiteLLM key-budget endpoint', () => {

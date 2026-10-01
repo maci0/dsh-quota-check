@@ -73,6 +73,30 @@ test('a reading is cached, so a rerender never re-asks the provider', async () =
   }
 })
 
+test('OpenCode Go reads quota with the route credential and keeps the key on the host', async () => {
+  const { route } = mount({
+    llm: { listConfigurableProviders: () => [{ provider: 'opencode-go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'opencode-go'] }] },
+    settings: { describe: () => [{ ns: 'llm-pi-ai', value: { providers: {
+      'opencode-go': { apiKeyEnv: 'MY_GO_KEY', baseURL: 'https://opencode.ai/zen/go/v1' },
+    } } }] },
+    credentials: { resolve: async (ref: string) => ref === 'MY_GO_KEY' ? { value: 'go-private-key' } : undefined },
+  })
+  const stub = stubFetch({ usage: { rolling: { percent: 25 }, weekly: { percent: 68 }, monthly: { percent: 10 } } })
+  try {
+    const reply = await request(route, `${ROUTE}?provider=opencode-go`)
+    const report = reply.body as { status: string; kind: string; text: string; remaining: number }
+    assert.equal(report.status, 'ok')
+    assert.equal(report.kind, 'quota')
+    assert.equal(report.text, 'Go 32%')
+    assert.equal(report.remaining, 32)
+    assert.equal(stub.calls[0]?.url, 'https://opencode.ai/zen/go/v1/usage')
+    assert.equal(stub.calls[0]?.headers['authorization'], 'Bearer go-private-key')
+    assert.equal(JSON.stringify(reply.body).includes('go-private-key'), false)
+  } finally {
+    stub.restore()
+  }
+})
+
 test('a provider with no published balance route reports unsupported and asks nobody', async () => {
   const { route } = mount({
     llm: { listConfigurableProviders: () => [{ provider: 'mystery-route', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'mystery-route'] }] },
