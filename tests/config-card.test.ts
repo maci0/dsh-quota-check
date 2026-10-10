@@ -172,7 +172,7 @@ test('apply binds the namespace and registers the row card', () => {
   assert.equal(typeof client.locale.dictionaries.zh.labelCacheSeconds, 'string')
   assert.deepEqual(client.injected, ['conversation.composer.dock', 'plugins.row.config'])
   assert.equal(client.chip.id, 'quota-check')
-  assert.equal(client.slot.key, 'dsh-quota-check#quota-check')
+  assert.equal(client.slot.key, '@maci0/dsh-quota-check#quota-check')
   assert.equal(client.slot.locale, 'quota-check')
 })
 
