@@ -104,7 +104,7 @@ function mount(): {
     return runtime.react
   }
   assert.ok(loaded, 'the bundle registered itself on window.__ModuleLoader__')
-  assert.equal(loaded.id, 'dsh-quota-check')
+  assert.equal(loaded.id, '@maci0/dsh-quota-check')
   // The factory appends its stylesheet while it materializes, so the page's
   // document exists for exactly that call.
   const scope = globalThis as { document?: unknown }

@@ -29,10 +29,12 @@ leaves the host process.
 > would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check#v0.13.0
+dsh plugin --profile web add github:maci0/dsh-quota-check#v0.13.1
 ```
 
-Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the same command with the newer tag, then restart `dsh web` (bundle layers compose at boot).
+Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the
+same command with the newer tag, then restart `dsh web` (bundle layers compose
+at boot).
 
 Do **not** also paste the `id: quota-check` row from `cordis.patch.yml` into the
 profile's own patch: `insert` does not dedupe ids.

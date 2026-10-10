@@ -10,4 +10,4 @@
 # dedupe ids, and a second row would register the plugin twice.
 - insert:
     - id: quota-check
-      name: 'dsh-quota-check'
+      name: '@maci0/dsh-quota-check'
