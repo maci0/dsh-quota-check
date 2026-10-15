@@ -5,11 +5,11 @@
     "": {
       "name": "@maci0/dsh-quota-check",
       "dependencies": {
-        "@deepseek-ai/schemastery": "3.18.5-alpha.1",
+        "@deepseek-ai/schemastery": "3.18.5-alpha.2",
       },
       "devDependencies": {
-        "@deepseek-ai/cordis": "4.0.5-alpha.1",
-        "@deepseek-ai/dsh-host-webserver": "0.2.1-alpha.2",
+        "@deepseek-ai/cordis": "4.0.5-alpha.2",
+        "@deepseek-ai/dsh-host-webserver": "0.2.1-alpha.3",
         "@types/node": "^22.20.2",
         "typescript": "^7.0.2",
       },
@@ -32,17 +32,17 @@
     },
   },
   "packages": {
-    "@deepseek-ai/cordis": ["@deepseek-ai/cordis@4.0.5-alpha.1", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6-alpha.1", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis-plugin-include": "~1.0.10-alpha.1", "@deepseek-ai/cordis-plugin-loader": "~1.0.6-alpha.1" }, "optionalPeers": ["@deepseek-ai/cordis-plugin-include", "@deepseek-ai/cordis-plugin-loader"], "bin": { "cordis": "bin.js" } }, "sha512-I0akiPAK9EEWO+GMAO0YGbn3/rzg/yopaxohBaG9JHM8dDzGaCZNp3mehjeC66IQL0AyTyDwvgv7v1aB+eMnKQ=="],
+    "@deepseek-ai/cordis": ["@deepseek-ai/cordis@4.0.5-alpha.2", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6-alpha.2", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis-plugin-include": "~1.0.10-alpha.2", "@deepseek-ai/cordis-plugin-loader": "~1.0.6-alpha.2" }, "optionalPeers": ["@deepseek-ai/cordis-plugin-include", "@deepseek-ai/cordis-plugin-loader"], "bin": { "cordis": "bin.js" } }, "sha512-rd5Qp6PNrMk+0saWVMLUaVv08s/WBwf2TXM84ST6tppFqlHS0Yl9l/NwPrA4oVOuS/1BKCYOGlZ6zJRj+JG6IQ=="],
 
-    "@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.8.6-alpha.1", "", {}, "sha512-qtuYVBRu7VrD1jLHvaM5sSShtBVgff/0R5vx57fsHUeeobvvv5TmtnTrs0+h4H263kF3ie25VO70Ija8R1eaow=="],
+    "@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.8.6-alpha.2", "", {}, "sha512-FcxdMUal80CeFURh3lPYsw9TPDMVSGpovWnA3JtTGrBG15XFli4k38z1Egso1lgvifKpIW4Hx42X6UTelLEOAA=="],
 
-    "@deepseek-ai/dsh-host-webserver": ["@deepseek-ai/dsh-host-webserver@0.2.1-alpha.2", "", { "dependencies": { "@deepseek-ai/schemastery": "~3.18.5-alpha.1", "compression": "^1.8.1", "ipaddr.js": "^2.5.0", "negotiator": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.0.5-alpha.1" } }, "sha512-wu5rAUaPhrzoTNvE6kxX3zQF+ufHuB6GqkTlVSY7aETrJ3XnUF9CG4oxI6WlLwrLuUeiN1t6xY5CW9RzPsVfag=="],
+    "@deepseek-ai/dsh-host-webserver": ["@deepseek-ai/dsh-host-webserver@0.2.1-alpha.3", "", { "dependencies": { "@deepseek-ai/schemastery": "~3.18.5-alpha.2", "compression": "^1.8.1", "ipaddr.js": "^2.5.0", "negotiator": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.0.5-alpha.2" } }, "sha512-lkRBhb0wOUcQotgxK0oe5zKsr0Yy7Yg/nLXLyN4YhRyoztdpfCFd5lK5cCIbq47U1HlymKGXgnLqFnBJgWRYfA=="],
 
-    "@deepseek-ai/schemastery": ["@deepseek-ai/schemastery@3.18.5-alpha.1", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6-alpha.1", "@standard-schema/spec": "^1.1.0" } }, "sha512-HojoBv1wMQn6N8nDgTgWbc/f4EFAlg/ZsIYN2AChnEDoFOmcWd3+MDzhozNffmywywzV7pcouHRR4x37YZfcjA=="],
+    "@deepseek-ai/schemastery": ["@deepseek-ai/schemastery@3.18.5-alpha.2", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6-alpha.2", "@standard-schema/spec": "^1.1.0" } }, "sha512-W+2TSjdeKOEKqaii9BNpw7ev2Yf8C+J74i/BE/VBx56O7BX0zxV2zQKwRY4ADLTXD5O69iJ+/Skm91/ES7iMgw=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@types/node": ["@types/node@22.20.4", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA=="],
+    "@types/node": ["@types/node@22.20.5", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA=="],
 
     "@typescript/typescript-aix-ppc64": ["@typescript/typescript-aix-ppc64@7.0.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ=="],
 
