@@ -146,7 +146,7 @@ async function requestToken(
   timeoutMs: number,
 ): Promise<{ status: number; body?: Record<string, unknown> }> {
   try {
-    const response = await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(timeoutMs) })
+    const response = await fetch(url, { method: 'POST', headers, body, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) })
     if (!response.ok) return { status: response.status }
     return { status: response.status, body: record(await response.json().catch(() => undefined)) }
   } catch {
@@ -314,13 +314,16 @@ async function grokRequests(home: string, force: boolean, timeoutMs: number): Pr
     && (force || (expiresMs !== undefined && expiresMs <= Date.now() + TOKEN_SKEW_S * 1_000))) {
     let rotated: { status: number; body?: Record<string, unknown> } = { status: 0 }
     try {
-      const discovery = record(await (await fetch(GROK_OIDC_DISCOVERY, {
+      const response = await fetch(GROK_OIDC_DISCOVERY, {
         signal: AbortSignal.timeout(timeoutMs),
         headers: { accept: 'application/json', 'user-agent': USER_AGENT },
-      })).json())
+        redirect: 'error',
+      })
+      const discovery = response.ok ? record(await response.json()) : undefined
       const tokenUrl = stringOf(discovery?.['token_endpoint'])
-      if (tokenUrl !== undefined) {
-        rotated = await requestToken(tokenUrl, {
+      const endpoint = tokenUrl === undefined ? undefined : new URL(tokenUrl)
+      if (endpoint?.origin === 'https://auth.x.ai' && endpoint.username === '' && endpoint.password === '') {
+        rotated = await requestToken(endpoint.href, {
           'content-type': 'application/x-www-form-urlencoded',
           accept: 'application/json',
           'user-agent': USER_AGENT,

@@ -358,7 +358,7 @@ async function buildReport(ctx: HostContext, providerId: string, timeoutMs: numb
     }
 
     let outcome = await fetchAll(requests, timeoutMs)
-    // A live-looking token can still be refused: rotate once and retry, which is
+    // A live-looking token can still be unauthenticated: rotate once and retry, which is
     // what the CLI's own fetcher does. Cursor has no refresh path, so a retry
     // there would only repeat the same refused request.
     if (local !== undefined && local !== 'cursor' && !outcome.ok && outcome.refused) {
@@ -414,7 +414,7 @@ interface RoundOutcome {
   readonly ok: boolean
   /** The last status seen, for the failure message. */
   readonly status: number
-  /** Whether a request was refused as unauthenticated or forbidden. */
+  /** Whether a request rejected its access token as unauthenticated. */
   readonly refused: boolean
   /** Decoded bodies, aligned with the requests (absent entries are failures). */
   readonly payloads: readonly (unknown | undefined)[]
@@ -439,7 +439,7 @@ async function fetchAll(requests: readonly LocalRequest[], timeoutMs: number): P
         signal: AbortSignal.timeout(timeoutMs),
       })
       status = response.status
-      if (response.status === 401 || response.status === 403) refused = true
+      if (response.status === 401) refused = true
       payloads.push(response.ok ? await response.json().catch(() => undefined) : undefined)
     } catch {
       payloads.push(undefined)

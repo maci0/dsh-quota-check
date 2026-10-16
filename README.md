@@ -29,12 +29,11 @@ leaves the host process.
 > would win).
 
 ```sh
-dsh plugin --profile web add github:maci0/dsh-quota-check#v0.13.2
+dsh plugin --profile web add --save-exact @maci0/dsh-quota-check@0.14.0
 ```
 
-Pin a release tag: a bare `github:` spec floats on `main`. To upgrade, run the
-same command with the newer tag, then restart `dsh web` (bundle layers compose
-at boot).
+Pin an exact npm version. To upgrade, run the same command with the newer
+version, then restart `dsh web` (bundle layers compose at boot).
 
 Do **not** also paste the `id: quota-check` row from `cordis.patch.yml` into the
 profile's own patch: `insert` does not dedupe ids.
@@ -152,8 +151,9 @@ broken setup behind "nothing to show". Clicking it retries.
   write-back that keeps the CLI signed in. Only Claude, Codex, and Grok ever
   rotate a token; Cursor's session token is long-lived and rotates in the IDE.
   Every token request is bounded by `timeoutMs`, and a refresh that fails or
-  times out falls back to the token on disk. Grok's token endpoint is discovered
-  at runtime, and its two billing meters (weekly credits, monthly spend) are two
+  times out falls back to the token on disk. Only a 401 triggers an extra refresh;
+  a 403 does not trigger another refresh. Grok's discovered token endpoint must remain
+  on `https://auth.x.ai`, and token requests refuse redirects. Its two billing meters (weekly credits, monthly spend) are two
   requests, so a probe may read more than one URL and still report when only one
   answered.
 

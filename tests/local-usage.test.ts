@@ -119,13 +119,18 @@ test('concurrent aliases share a credential refresh without losing edits made du
   const path = join(home, '.claude', '.credentials.json')
   const original = globalThis.fetch
   let calls = 0
+  let entered!: () => void
+  let release!: () => void
+  const refreshing = new Promise<void>((resolve) => { entered = resolve })
+  const gate = new Promise<void>((resolve) => { release = resolve })
   globalThis.fetch = (async () => {
     calls += 1
     const latest = JSON.parse(await readFile(path, 'utf8'))
     latest.subscriptionType = 'new-plan'
     latest.claudeAiOauth.scopes = ['new-scope']
     await writeCredential(path, latest)
-    await new Promise(resolve => setTimeout(resolve, 20))
+    entered()
+    await gate
     return Response.json({ access_token: 'rotated', refresh_token: 'r2', expires_in: 3_600 })
   }) as typeof fetch
   try {
@@ -133,13 +138,17 @@ test('concurrent aliases share a credential refresh without losing edits made du
       claudeAiOauth: { accessToken: 'stale', refreshToken: 'r', expiresAt: Date.now() - 1_000 },
       subscriptionType: 'old-plan',
     })
-    const results = await Promise.all([1, 2].map(() => localRequests('claude', { home, timeoutMs: TIMEOUT_MS })))
+    const pending = Promise.all([1, 2].map(() => localRequests('claude', { home, timeoutMs: TIMEOUT_MS })))
+    await refreshing
+    release()
+    const results = await pending
     assert.equal(calls, 1, 'one expired token must not be refreshed twice concurrently')
     assert.ok(results.every(requests => requests[0]?.headers['authorization'] === 'Bearer rotated'))
     const stored = JSON.parse(await readFile(path, 'utf8'))
     assert.equal(stored.subscriptionType, 'new-plan')
     assert.deepEqual(stored.claudeAiOauth.scopes, ['new-scope'])
   } finally {
+    release()
     globalThis.fetch = original
     await dispose()
   }
@@ -309,6 +318,33 @@ test('Cursor sends its session cookie built from the token subject', async () =>
   } finally {
     if (previous !== undefined) process.env['CURSOR_AUTH_JSON'] = previous
     await dispose()
+  }
+})
+
+test('Grok refresh stays on its HTTPS issuer and refuses redirects', async () => {
+  for (const endpoint of ['https://auth.x.ai/token', 'https://other.test/token', 'http://auth.x.ai/token', 'https://user:pass@auth.x.ai/token']) {
+    const { home, dispose } = await temporaryHome()
+    const original = globalThis.fetch
+    let refreshes = 0
+    globalThis.fetch = (async (url, init) => {
+      assert.equal(init?.redirect, 'error')
+      if (String(url).includes('openid-configuration')) return Response.json({ token_endpoint: endpoint })
+      refreshes += 1
+      assert.equal(String(url), 'https://auth.x.ai/token')
+      return Response.json({ access_token: 'rotated', expires_in: 3600 })
+    }) as typeof fetch
+    try {
+      await writeCredential(join(home, '.grok', 'auth.json'), {
+        'user::client': { key: 'old', refresh_token: 'fixture-refresh', expires_at: '2000-01-01T00:00:00Z' },
+      })
+      const requests = await localRequests('grok', { home, timeoutMs: TIMEOUT_MS })
+      const allowed = endpoint === 'https://auth.x.ai/token'
+      assert.equal(refreshes, allowed ? 1 : 0, endpoint)
+      assert.equal(requests[0]?.headers['authorization'], allowed ? 'Bearer rotated' : 'Bearer old')
+    } finally {
+      globalThis.fetch = original
+      await dispose()
+    }
   }
 })
 

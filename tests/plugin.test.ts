@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
@@ -266,6 +266,40 @@ test('an untrusted caller is fenced off before any lookup', async () => {
     assert.equal(stub.calls.length, 0)
   } finally {
     stub.restore()
+  }
+})
+
+test('a forbidden quota read preserves the login, while a 401 refreshes it once', async () => {
+  for (const status of [403, 401]) {
+    const home = await mkdtemp(join(SCRATCH, 'quota-auth-test-'))
+    const savedHome = process.env['HOME']
+    const original = globalThis.fetch
+    let refreshes = 0
+    const path = join(home, '.claude', '.credentials.json')
+    const credentials = { claudeAiOauth: { accessToken: 'valid', refreshToken: 'refresh', expiresAt: Date.now() + 3_600_000 } }
+    try {
+      await mkdir(join(home, '.claude'))
+      await writeFile(path, JSON.stringify(credentials))
+      process.env['HOME'] = home
+      globalThis.fetch = (async (url) => {
+        if (String(url).includes('/oauth/token')) {
+          refreshes += 1
+          return Response.json({ access_token: 'rotated', refresh_token: 'next-refresh', expires_in: 3600 })
+        }
+        return new Response('', { status })
+      }) as typeof fetch
+      const { route } = mount({})
+      await request(route, `${ROUTE}?provider=claude`)
+      assert.equal(refreshes, status === 401 ? 1 : 0)
+      const stored = JSON.parse(await readFile(path, 'utf8'))
+      if (status === 403) assert.deepEqual(stored, credentials)
+      else assert.equal(stored.claudeAiOauth.accessToken, 'rotated')
+    } finally {
+      globalThis.fetch = original
+      if (savedHome === undefined) delete process.env['HOME']
+      else process.env['HOME'] = savedHome
+      await rm(home, { recursive: true, force: true })
+    }
   }
 })
 
