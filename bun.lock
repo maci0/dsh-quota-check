@@ -5,11 +5,11 @@
     "": {
       "name": "@maci0/dsh-quota-check",
       "dependencies": {
-        "@deepseek-ai/schemastery": "3.18.5",
+        "@deepseek-ai/schemastery": "3.18.6-alpha.2",
       },
       "devDependencies": {
-        "@deepseek-ai/cordis": "4.0.5",
-        "@deepseek-ai/dsh-host-webserver": "0.2.2-alpha.2",
+        "@deepseek-ai/cordis": "4.0.6-alpha.2",
+        "@deepseek-ai/dsh-host-webserver": "0.2.2-alpha.3",
         "@types/node": "^22.20.2",
         "typescript": "^7.0.2",
       },
@@ -32,13 +32,13 @@
     },
   },
   "packages": {
-    "@deepseek-ai/cordis": ["@deepseek-ai/cordis@4.0.5", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis-plugin-include": "~1.0.10", "@deepseek-ai/cordis-plugin-loader": "~1.0.6" }, "optionalPeers": ["@deepseek-ai/cordis-plugin-include", "@deepseek-ai/cordis-plugin-loader"], "bin": { "cordis": "bin.js" } }, "sha512-Sktq5axy0owk9PdnivBRNOJjHEVEibCt0+TDDZcv0+UH2KS1M910fX4kn5y45YFsrpZIi1mJf/1s5VzywMUnyg=="],
+    "@deepseek-ai/cordis": ["@deepseek-ai/cordis@4.0.6-alpha.2", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.7-alpha.2", "@standard-schema/spec": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis-plugin-include": "~1.0.11-alpha.2", "@deepseek-ai/cordis-plugin-loader": "~1.0.7-alpha.2" }, "optionalPeers": ["@deepseek-ai/cordis-plugin-include", "@deepseek-ai/cordis-plugin-loader"], "bin": { "cordis": "bin.js" } }, "sha512-/JVFMlHToFpIsoWPuTfQrv5wQ8hK021ZGRnovzHB9p1xhe+/y2wgidAf5BvsNZQDUF2GXEnhSm3RnAxYmteeYQ=="],
 
-    "@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.8.6", "", {}, "sha512-ZSD/fN52L498LBIOYwjIOlaLv5veY6ZEwI2yzvZUKQtctn0QAPqu8tKdJ+OF5+Tv6NBq1U+wJWH+QI6OGy5EvQ=="],
+    "@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.8.7-alpha.2", "", {}, "sha512-cZQ1AhU/fxPkPnp0HAk7zbBGG0lnFUtlceACSDqWQ0a1RiTV1vcL2YRkHD5xCY026j/4Smgce1TuaCFZXhzt6A=="],
 
-    "@deepseek-ai/dsh-host-webserver": ["@deepseek-ai/dsh-host-webserver@0.2.2-alpha.2", "", { "dependencies": { "@deepseek-ai/schemastery": "~3.18.6-alpha.1", "compression": "^1.8.1", "ipaddr.js": "^2.5.0", "negotiator": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.0.6-alpha.1" } }, "sha512-RYRAkfXjxgjDreg1WN1sHUI8Nvkl/3NAUfFueUW7LpOVFcBLjs1pLEAGOXmC31+oGJtl69MiM99qD+3IvK4LZA=="],
+    "@deepseek-ai/dsh-host-webserver": ["@deepseek-ai/dsh-host-webserver@0.2.2-alpha.3", "", { "dependencies": { "@deepseek-ai/schemastery": "~3.18.6-alpha.2", "compression": "^1.8.1", "ipaddr.js": "^2.5.0", "negotiator": "^1.1.0" }, "peerDependencies": { "@deepseek-ai/cordis": "~4.0.6-alpha.2" } }, "sha512-DsHbAsOEEjwLo2VRCWkYOSGWwPUhNgCCibg8ltuT9UZWBeTJEAktrEV80/aljZaBlGzmIOz23+MMMaMJUr0D0A=="],
 
-    "@deepseek-ai/schemastery": ["@deepseek-ai/schemastery@3.18.5", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.6", "@standard-schema/spec": "^1.1.0" } }, "sha512-Mnobvqf9rHsZYv4g5edj5ddxS1oF1kIdSlz0DunUgnY3LWG5F26MqvH3YOOsSaodCgyzJ16OMN9O99/s5Crtdw=="],
+    "@deepseek-ai/schemastery": ["@deepseek-ai/schemastery@3.18.6-alpha.2", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.7-alpha.2", "@standard-schema/spec": "^1.1.0" } }, "sha512-lRrvZLD9v1BAG5625lyYcRcMJ2xInGjWl65W6H3kL/YSCXUU2/aD1XLBXvoNYvXw2RuAXEfNTSFuZ/XArstwVA=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
@@ -114,10 +114,6 @@
 
     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
 
-    "@deepseek-ai/dsh-host-webserver/@deepseek-ai/schemastery": ["@deepseek-ai/schemastery@3.18.6-alpha.1", "", { "dependencies": { "@deepseek-ai/cosmokit": "~1.8.7-alpha.1", "@standard-schema/spec": "^1.1.0" } }, "sha512-ID5DKpWa0BnrcNdZ3ofWkhOoRLQ3MsFr1FdRVHBiALeE9egaCm4QatuCvQK0Cd/haRBcEvefacz2JEYYMFAEnw=="],
-
     "compression/negotiator": ["negotiator@0.6.4", "", {}, "sha512-myRT3DiWPHqho5PrJaIRyaMv2kgYf0mUVgBNOYMuCH5Ki1yEiQaf/ZJuQ62nvpc44wL5WDbTX7yGJi1Neevw8w=="],
-
-    "@deepseek-ai/dsh-host-webserver/@deepseek-ai/schemastery/@deepseek-ai/cosmokit": ["@deepseek-ai/cosmokit@1.8.7-alpha.1", "", {}, "sha512-+R+9sx+SJbkyeidV3s+fvgsqCMZAfx2Z00YCQNhc5RsTen1SnvIYWM8neQah/1SxjlsXRo9jxX9U58Wk68JjvA=="],
   }
 }
