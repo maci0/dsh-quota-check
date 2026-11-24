@@ -22,7 +22,7 @@ export interface Services {
   llm?: unknown
   settings?: { describe(): readonly SettingsDescriptorLike[] }
   credentials?: { resolve(ref: string): Promise<{ value: string } | undefined> }
-  connection?: { requestRejection(request: { headers: object | undefined }): 401 | 403 | undefined }
+  connection?: { requestRejection?(request: { headers: object | undefined }): 401 | 403 | undefined }
 }
 
 /** Mount the plugin over a fake context and return its registered route. */

@@ -96,7 +96,7 @@ function mount(): {
   const loaded = REGISTRATION
   const appended: { textContent: string }[] = []
   const documentStub = {
-    createElement: (): { textContent: string } => ({ textContent: '' }),
+    createElement: (): { textContent: string; setAttribute: () => void } => ({ textContent: '', setAttribute: () => {} }),
     head: { append: (element: { textContent: string }): void => { appended.push(element) } },
   }
   const requireFn = (id: string): unknown => {
@@ -105,13 +105,14 @@ function mount(): {
   }
   assert.ok(loaded, 'the bundle registered itself on window.__ModuleLoader__')
   assert.equal(loaded.id, '@maci0/dsh-quota-check')
-  // The factory appends its stylesheet while it materializes, so the page's
-  // document exists for exactly that call.
+  const exported = loaded.factory(requireFn)
+  assert.deepEqual(exported['inject'], ['slots', 'configForms', 'locale'])
+  // `apply` appends the stylesheet, so the page's document exists for exactly
+  // that call.
   const scope = globalThis as { document?: unknown }
   scope.document = documentStub
-  let exported: Record<string, unknown>
   try {
-    exported = loaded.factory(requireFn)
+    ;(exported['apply'] as (ctx: unknown) => void)(ctx)
   } finally {
     delete scope.document
   }
@@ -121,8 +122,6 @@ function mount(): {
   const sheet = appended[0]?.textContent ?? ''
   assert.match(sheet, /\.qc-chip\{--qc-control-inset:46px;order:1;margin-left:auto;margin-right:calc\(max\(0px,\(100% - var\(--dsh-composer-card-max-width\)\)\/2\) \+ var\(--qc-control-inset\)\)/)
   assert.match(sheet, /border-radius:999px;corner-shape:round/)
-  assert.deepEqual(exported['inject'], ['slots', 'configForms', 'locale'])
-  ;(exported['apply'] as (ctx: unknown) => void)(ctx)
   const registration = registrations[0]
   assert.ok(registration)
   return { ...registration, runtime }

@@ -512,7 +512,7 @@ export function apply(ctx: HostContext, row: Config | Options = {}): void {
   }
 
   const handler = async (req: RequestLike, res: ResponseLike): Promise<void> => {
-    const rejection = ctx.connection.requestRejection(req)
+    const rejection = ctx.connection.requestRejection?.(req)
     if (rejection !== undefined) {
       res.statusCode = rejection
       res.end()

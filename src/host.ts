@@ -98,8 +98,9 @@ export interface ConnectionLike {
    * Reject an untrusted or unauthenticated request.
    * @param request - headers of the incoming request.
    * @returns the rejection status, or `undefined` when the request may proceed.
+   * Absent where the web server admits each route itself (route `auth`, default `required`).
    */
-  requestRejection(request: { readonly headers: object | undefined }): 401 | 403 | undefined
+  requestRejection?(request: { readonly headers: object | undefined }): 401 | 403 | undefined
 }
 
 /**

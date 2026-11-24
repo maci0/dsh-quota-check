@@ -269,6 +269,12 @@ test('an untrusted caller is fenced off before any lookup', async () => {
   }
 })
 
+test('without the connection fence the route leaves admission to the web server', async () => {
+  const { route } = mount({ ...deepSeekServices(), connection: {} })
+  assert.equal((await request(route, ROUTE)).status, 400)
+  assert.equal((route as { auth?: unknown }).auth ?? 'required', 'required', 'the route must not opt out of web server authentication')
+})
+
 test('a forbidden quota read preserves the login, while a 401 refreshes it once', async () => {
   for (const status of [403, 401]) {
     const home = await mkdtemp(join(SCRATCH, 'quota-auth-test-'))

@@ -1,6 +1,6 @@
 {
   "name": "@maci0/dsh-quota-check",
-  "version": "0.15.3",
+  "version": "0.15.4",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
